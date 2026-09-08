@@ -42,15 +42,18 @@ def _chunk_file(path: str) -> list[str]:
     # utf-8-sig automatically strips a leading UTF-8 BOM (EF BB BF), which
     # would otherwise either corrupt tree-sitter parsing or leak a garbage
     # char into every chunk on Windows' default cp1252 read.
-    with open(path, "r", errors="ignore", encoding="utf-8-sig") as f:
+    with open(path, errors="ignore", encoding="utf-8-sig") as f:
         source = f.read()
 
-    # Python files get AST-aware chunking (function/class boundaries).
-    # Everything else (and any parse errors) falls back to line windows.
-    if path.endswith(".py"):
+    # Languages with a tree-sitter binding get AST-aware chunking
+    # (function/class/method boundaries). Everything else (and any parse
+    # errors) falls back to line windows.
+    from rag.ast_chunker import chunk_source, language_for_extension
+
+    language = language_for_extension(path)
+    if language:
         try:
-            from rag.ast_chunker import chunk_python
-            chunks = chunk_python(source)
+            chunks = chunk_source(source, language)
             return [c for c in chunks if c.strip()]
         except Exception:
             pass  # fall through to line-window chunking
@@ -92,6 +95,7 @@ def index_directory(root: str) -> int:
 
 def reset_index():
     """Wipes the collection so you can re-index from scratch."""
-    from rag.store import get_collection, DB_PATH, COLLECTION_NAME
     import shutil
+
+    from rag.store import DB_PATH
     shutil.rmtree(DB_PATH, ignore_errors=True)
