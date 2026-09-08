@@ -203,3 +203,24 @@ def test_config_web_properties(monkeypatch):
     cfg2 = Config()
     assert cfg2.web_require_auth is False
     assert cfg2.web_token == ""
+
+
+def test_write_file_endpoint(client, tmp_path, monkeypatch):
+    import agent.tools
+    monkeypatch.setattr(agent.tools, "WORKSPACE_ROOT", str(tmp_path))
+    monkeypatch.setattr("webapp.server.WORKSPACE_ROOT", str(tmp_path))
+
+    # Test writing a new file
+    resp = client.post("/api/files/write", json={"path": "hello.txt", "content": "Hello World!"})
+    assert resp.status_code == 200
+    assert resp.json()["path"] == "hello.txt"
+
+    # Test reading back
+    read_resp = client.get("/api/files/read?path=hello.txt")
+    assert read_resp.status_code == 200
+    assert read_resp.json()["content"] == "Hello World!"
+
+    # Test missing path
+    err_resp = client.post("/api/files/write", json={"content": "missing path"})
+    assert err_resp.status_code == 400
+

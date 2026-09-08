@@ -234,9 +234,25 @@ async def read_file(path: str):
         return JSONResponse(status_code=400, content={"error": str(e)})
 
 
+@app.post("/api/files/write", dependencies=[Depends(require_auth)])
+async def write_file(data: dict):
+    """Write file content to workspace. Reuses agent's _write_file for path safety."""
+    from agent.tools import _write_file
+    path = data.get("path", "")
+    content = data.get("content", "")
+    if not path:
+        return JSONResponse(status_code=400, content={"error": "path is required"})
+    try:
+        result = _write_file(path, content)
+        return {"path": path, "result": result}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+
+
 # ---------------------------------------------------------------------------
 # WebSocket - streaming chat
 # ---------------------------------------------------------------------------
+
 
 def _agent_stream(agent: Agent, message: str, queue: asyncio.Queue):
     """Run the agent in a background thread and push chunks to the queue."""
