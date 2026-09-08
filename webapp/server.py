@@ -15,34 +15,104 @@ Run with:
 """
 
 import asyncio
-import json
 import os
+import secrets
+import string
 import threading
-from typing import Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv()
 
+from agent.checkpoint import CheckpointManager
+from agent.config import get_config
 from agent.core import Agent
 from agent.session import SessionManager
-from agent.checkpoint import CheckpointManager
 from agent.tools import WORKSPACE_ROOT
-from agent.config import get_config
 
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 
 app = FastAPI(title="Agentic IDE Web", version="0.1.0")
+
+_bearer = HTTPBearer(auto_error=False)
+
+# Ephemeral token used when auth is required but no token is configured.
+_EPHEMERAL_TOKEN = {"value": ""}
+
+
+# ---------------------------------------------------------------------------
+# Security
+# ---------------------------------------------------------------------------
+
+def _configured_token() -> str:
+    """Resolve the API token from config/env, or generate an ephemeral one."""
+    cfg = get_config()
+    explicit = cfg.web_token
+    if explicit:
+        return explicit
+    if not cfg.web_require_auth:
+        return ""
+    if not _EPHEMERAL_TOKEN["value"]:
+        alphabet = string.ascii_letters + string.digits
+        _EPHEMERAL_TOKEN["value"] = "".join(secrets.choice(alphabet) for _ in range(32))
+    return _EPHEMERAL_TOKEN["value"]
+
+
+def auth_enabled() -> bool:
+    """True if the web UI requires an API token."""
+    return get_config().web_require_auth
+
+
+def verify_token(provided: str) -> bool:
+    """Validate a raw token string against the expected value."""
+    if not auth_enabled():
+        return True
+    return bool(provided) and secrets.compare_digest(provided, _configured_token())
+
+
+def require_auth(credentials: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> None:
+    """FastAPI dependency that rejects unauthenticated REST calls when auth is on."""
+    if not auth_enabled():
+        return
+    if credentials is None or not verify_token(credentials.credentials):
+        raise HTTPException(status_code=401, detail="Missing or invalid API token")
+
+
+def _setup_cors() -> None:
+    """Add CORS middleware only when allow_origins is explicitly configured."""
+    origins = get_config().web_allow_origins
+    if not origins:
+        return
+    from fastapi.middleware.cors import CORSMiddleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+
+def _ensure_token_printed() -> None:
+    """If auth is required and only an ephemeral token is available, print it."""
+    if not get_config().web_require_auth:
+        return
+    if not get_config().web_token:
+        print(f"\n  [security] API token protection enabled. Token: {_configured_token()}\n")
+
+
+_setup_cors()
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _serialize_chunk(chunk) -> Optional[dict]:
+def _serialize_chunk(chunk) -> dict | None:
     """Convert an agent stream chunk into a JSON-serializable message."""
     if isinstance(chunk, str):
         return {"type": "text", "data": chunk}
@@ -97,7 +167,7 @@ async def index():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
-@app.get("/api/health")
+@app.get("/api/health", dependencies=[Depends(require_auth)])
 async def health():
     config = get_config()
     return {
@@ -108,19 +178,19 @@ async def health():
     }
 
 
-@app.get("/api/sessions")
+@app.get("/api/sessions", dependencies=[Depends(require_auth)])
 async def list_sessions():
     mgr = SessionManager()
     return {"sessions": mgr.list_sessions()}
 
 
-@app.get("/api/diff")
+@app.get("/api/diff", dependencies=[Depends(require_auth)])
 async def diff():
     mgr = CheckpointManager()
     return {"diff": mgr.get_workspace_diff()}
 
 
-@app.post("/api/index")
+@app.post("/api/index", dependencies=[Depends(require_auth)])
 async def index_workspace():
     try:
         from rag.indexer import index_directory
@@ -145,19 +215,19 @@ async def index_workspace():
     return {"count": result.get("count", 0)}
 
 
-@app.get("/api/files")
+@app.get("/api/files", dependencies=[Depends(require_auth)])
 async def files():
     return {"root": WORKSPACE_ROOT, "tree": _build_file_tree(WORKSPACE_ROOT)}
 
 
-@app.get("/api/files/read")
+@app.get("/api/files/read", dependencies=[Depends(require_auth)])
 async def read_file(path: str):
     from agent.tools import _resolve
     try:
         full = _resolve(path)
         if not os.path.exists(full) or os.path.isdir(full):
             return JSONResponse(status_code=404, content={"error": f"File not found: {path}"})
-        with open(full, "r", encoding="utf-8", errors="replace") as f:
+        with open(full, encoding="utf-8", errors="replace") as f:
             content = f.read()
         return {"path": path, "content": content}
     except Exception as e:
@@ -195,6 +265,10 @@ def _agent_stream(agent: Agent, message: str, queue: asyncio.Queue):
 
 @app.websocket("/ws/chat")
 async def chat(ws: WebSocket):
+    token = ws.query_params.get("token", "")
+    if not verify_token(token):
+        await ws.close(code=4401, reason="unauthorized")
+        return
     await ws.accept()
     agent = Agent(enable_evaluation=True)
     try:
@@ -272,6 +346,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 def run_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = False):
     """Launch the uvicorn dev server."""
     import uvicorn
+    _ensure_token_printed()
     uvicorn.run("webapp.server:app", host=host, port=port, reload=reload, log_level="info")
 
 

@@ -257,6 +257,24 @@
   .msg-bubble p { margin: 6px 0; }
   .msg-bubble strong { color: #fff; }
 
+  /* Syntax highlighting tokens */
+  .tok-c { color: #5c6678; font-style: italic; }
+  .tok-s { color: #a5e28c; }
+  .tok-k { color: #7aa2f7; }
+  .tok-t { color: #bb9af7; }
+  .tok-f { color: #ffd787; }
+  .tok-n { color: #ff9e64; }
+  .tok-b { color: #73daca; }
+
+  /* Markdown tables */
+  .md-table { overflow-x: auto; margin: 9px 0; }
+  .msg-bubble table { border-collapse: collapse; font-size: 12.3px; width: 100%; }
+  .msg-bubble th, .msg-bubble td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+  .msg-bubble th { background: var(--surface-2); color: #fff; font-weight: 600; }
+  .msg-bubble tr:nth-child(even) td { background: rgba(22,28,40,0.45); }
+  .msg-bubble a { color: var(--accent-2); }
+  .msg-bubble h4 { margin: 10px 0 4px; font-size: 14px; color: #fff; }
+
   /* Tool call pill */
   .tool-pill {
     display: inline-flex; align-items: center; gap: 6px;
@@ -271,6 +289,9 @@
     cursor: default;
   }
   .tool-pill .tk { color: var(--accent-2); font-weight: 700; font-size: 12px; }
+  .tool-pill.clickable { cursor: pointer; }
+  .tool-pill.clickable:hover { border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
+  .tool-pill.clickable .tn:hover { text-decoration: underline; }
 
   /* Thinking indicator */
   .thinking .msg-bubble { display: flex; align-items: center; gap: 8px; color: var(--text-muted); }
@@ -423,6 +444,34 @@
     overflow: hidden;
     box-shadow: 0 24px 80px rgba(0,0,0,0.5);
   }
+  .modal.small { width: min(420px, 92vw); }
+  .modal-cta {
+    display: flex; flex-wrap: wrap; gap: 8px;
+    justify-content: flex-end;
+    padding: 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .modal-cta .failed-msg { color: var(--red); margin-top: 7px; width: 100%; text-align: right; }
+  .auth-sub {
+    padding: 18px 20px 8px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+  .auth-sub p { margin: 0 0 12px; line-height: 1.55; }
+  .auth-sub input {
+    width: 100%;
+    margin-bottom: 12px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-family: var(--mono);
+    font-size: 13px;
+  }
+  .auth-sub input:focus { outline: none; border-color: var(--accent); }
+  .auth-err { color: var(--red); font-size: 12px; margin-top: 4px; text-align: right; }
   .modal-head {
     padding: 13px 16px;
     border-bottom: 1px solid var(--border);
@@ -556,12 +605,30 @@
   </div>
 </div>
 
+<!-- ── Auth Modal ─────────────────────────── -->
+<div class="modal-overlay" id="authOverlay">
+  <div class="modal small">
+    <div class="modal-head">
+      <span>🔑</span> Authentication Required
+    </div>
+    <div class="auth-sub">
+      <p>This Agentic IDE server is protected. Enter the API token from your <code>.env</code> (<code>AGENTIC_WEB_TOKEN</code>) to continue.</p>
+      <input type="password" id="authTokenInput" placeholder="Paste your token" autocomplete="off" spellcheck="false">
+      <div class="auth-err" id="authErr"></div>
+    </div>
+    <div class="modal-cta">
+      <button class="btn primary" id="authSubmitBtn">Unlock</button>
+    </div>
+  </div>
+</div>
+
 <script>
 "use strict";
 
 // ── State ──────────────────────────────────
 let ws = null;
 let busy = false;
+let wsIntentionalClose = false;
 let thinkingEl = null;
 let agentTextAccum = "";   // accumulate streaming text within a bubble
 let agentBubble = null;
@@ -578,16 +645,49 @@ const usageLeft = document.getElementById("usageLeft");
 const usageCost = document.getElementById("usageCost");
 const usageCalls = document.getElementById("usageCalls");
 const usageTools = document.getElementById("usageTools");
+const authOverlay = document.getElementById("authOverlay");
+const authErr = document.getElementById("authErr");
+
+// ── Auth helpers ───────────────────────────
+function webToken() { return localStorage.getItem("agentic_web_token") || ""; }
+
+function setWebToken(t) {
+  if (t) localStorage.setItem("agentic_web_token", t.trim());
+  else localStorage.removeItem("agentic_web_token");
+}
+
+function showAuth() {
+  authErr.textContent = "";
+  authOverlay.classList.add("open");
+  document.getElementById("authTokenInput").focus();
+}
+function hideAuth() { authOverlay.classList.remove("open"); }
+
+async function fetchApi(path, opts) {
+  opts = opts || {};
+  opts.headers = Object.assign({}, opts.headers);
+  const t = webToken();
+  if (t) opts.headers["Authorization"] = "Bearer " + t;
+  const res = await fetch(path, opts);
+  if (res.status === 401) { showAuth(); throw new Error("unauthorized"); }
+  return res;
+}
 
 // ── WebSocket connect ──────────────────────
 function connectWS() {
   const proto = location.protocol === "https:" ? "wss://" : "ws://";
-  ws = new WebSocket(proto + location.host + "/ws/chat");
+  let url = proto + location.host + "/ws/chat";
+  const t = webToken();
+  if (t) url += "?token=" + encodeURIComponent(t);
+  wsIntentionalClose = false;
+  ws = new WebSocket(url);
 
-  ws.onopen = () => { setStatus("ready", true); };
+  ws.onopen = () => { setStatus("ready", true); hideAuth(); };
 
-  ws.onclose = () => {
+  ws.onclose = (ev) => {
     setStatus("disconnected", false);
+    if (ev && ev.code === 4401) { showAuth(); return; }
+    if (wsIntentionalClose) return;
     setTimeout(() => { if (!busy) connectWS(); }, 2000);
   };
 
@@ -599,6 +699,27 @@ function connectWS() {
     handleServerMsg(msg);
   };
 }
+
+document.getElementById("authSubmitBtn").addEventListener("click", () => {
+  const val = document.getElementById("authTokenInput").value.trim();
+  if (!val) return;
+  authErr.textContent = "Checking token…";
+  setWebToken(val);
+  wsIntentionalClose = true;
+  try { if (ws) ws.close(); } catch {}
+  connectWS();
+  fetchApi("/api/health").then(() => {
+    hideAuth();
+    authErr.textContent = "";
+    loadFiles();
+    loadSessions();
+  }).catch(() => {
+    // wrong token → socket closes with 4401 and the overlay stays up
+  });
+});
+document.getElementById("authTokenInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") document.getElementById("authSubmitBtn").click();
+});
 
 function setStatus(txt, ok) {
   statusText.textContent = txt;
@@ -708,6 +829,15 @@ function addToolPill(name, args) {
   if (argsStr.length > 60) argsStr = argsStr.slice(0, 60) + "…";
   pill.className = "tool-pill";
   pill.innerHTML = `<span class="tk">→</span> <span class="tn">${escapeHtml(name)}(${escapeHtml(argsStr)})</span>`;
+
+  // File tools open the file directly from the chat (auto file-open).
+  const FILE_TOOLS = ["read_file", "write_file", "edit_file", "read_file_range", "grep_search"];
+  if (FILE_TOOLS.indexOf(name) !== -1 && args && args.path && args.path !== ".") {
+    pill.classList.add("clickable");
+    pill.title = "Click to open file";
+    pill.addEventListener("click", () => openFile(args.path));
+  }
+
   agentBubble.insertAdjacentElement("beforeend", pill);
   scrollToBottom();
 }
@@ -775,16 +905,118 @@ function scrollToBottom() {
 }
 
 // ── Tiny markdown renderer ──────────────────
+const HIGHLIGHT_LANGS = {
+  python: { comment: /#[^\n]*/, string: /("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')/,
+    kw: "and as assert async await break class continue def del elif else except finally for from global if import in is lambda nonlocal not or pass raise return try while with yield match case",
+    builtin: "True False None self print len range str int float list dict set tuple super type isinstance enumerate zip map filter any all min max sum open sorted reversed" },
+  javascript: { comment: /\/\/[^\n]*|\/\*[\s\S]*?\*\//, string: /(`[\s\S]*?`|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')/,
+    kw: "const let var function return if else for while do switch case break continue new class extends super import export from default async await try catch finally throw typeof instanceof in of yield delete",
+    builtin: "this undefined null NaN Infinity true false console window document require module exports" },
+  typescript: { comment: /\/\/[^\n]*|\/\*[\s\S]*?\*\//, string: /(`[\s\S]*?`|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*')/,
+    kw: "const let var function return if else for while do switch case break continue new class extends super import export from default async await try catch finally throw typeof instanceof in of yield interface type enum namespace declare readonly private protected public implements delete",
+    builtin: "this undefined null NaN Infinity true false console window document require module exports never any unknown" },
+  java: { comment: /\/\/[^\n]*|\/\*[\s\S]*?\*\//, string: /"(?:\\.|[^"\\\n])*"/,
+    kw: "public private protected class interface enum extends implements import package static final void int long short byte char float double boolean new return if else for while do switch case break continue try catch finally throw throws this super abstract volatile synchronized native instanceof var",
+    builtin: "true false null System String print println" },
+  go: { comment: /\/\/[^\n]*|\/\*[\s\S]*?\*\//, string: /(`[\s\S]*?`|"(?:\\.|[^"\\\n])*")/,
+    kw: "package import func var const type struct interface map chan go defer return if else for range switch case default break continue fallthrough goto select nil iota",
+    builtin: "true false len cap append copy make new delete panic recover error string int int64 float64 bool byte rune uint" },
+  rust: { comment: /\/\/[^\n]*|\/\*[\s\S]*?\*\//, string: /("(?:\\.|[^"\\\n])*"|r#+[\s\S]*?#)/,
+    kw: "fn let mut const static struct enum trait impl mod use pub crate self super match if else for while loop return break continue type where as unsafe async await dyn move ref in",
+    builtin: "Some None Ok Err true false String Vec Result Option i32 i64 u32 u64 f32 f64 usize isize bool str" },
+  bash: { comment: /#[^\n]*/, string: /("(?:\\.|[^"\\\n])*"|'[^'\n]*')/,
+    kw: "if then else elif fi for in do done while case esac function export local set unset echo sudo apt pip git cd ls rm mkdir touch cp mv cat grep sed awk chmod",
+    builtin: "true false" },
+  toml: { comment: /#[^\n]*/, string: /("""[\s\S]*?"""|"[^"\n]*"|'[^'\n]*')/, kw: "", builtin: "true false" },
+  yaml: { comment: /#[^\n]*/, string: /"[^"\n]*"|'[^'\n]*'/, kw: "", builtin: "true false null yes no on off" },
+  json: { comment: null, string: /"[^"\n]*"/, kw: "", builtin: "true false null" },
+  text: { comment: null, string: null, kw: "", builtin: "" },
+};
+const EXT_LANG = { py: "python", js: "javascript", mjs: "javascript", jsx: "javascript", ts: "typescript", tsx: "typescript", java: "java", go: "go", rs: "rust", sh: "bash", bash: "bash", toml: "toml", yaml: "yaml", yml: "yaml", json: "json" };
+const _reCache = {};
+function langForPath(p) {
+  const ext = String(p || "").split(".").pop().toLowerCase();
+  return EXT_LANG[ext] || "text";
+}
+function buildHighlightRe(cfg) {
+  const key = (cfg.kw || "") + "|" + (cfg.builtin || "") + "|" + (cfg.string ? "s" : "") + "|" + (cfg.comment ? "c" : "");
+  if (_reCache[key]) return _reCache[key];
+  const parts = [];
+  if (cfg.string) parts.push("(" + cfg.string.source + ")");
+  if (cfg.comment) parts.push("(" + cfg.comment.source + ")");
+  const kw = (cfg.kw || "").split(/\s+/).filter(Boolean);
+  if (kw.length) parts.push("(\\b(?:" + kw.join("|") + ")\\b)");
+  parts.push("(\\b[A-Z][A-Za-z0-9_]*\\b)");
+  parts.push("(\\b[a-zA-Z_$][\\w$]*(?=\\s*\\())");
+  parts.push("(\\b\\d[\\d_]*(?:\\.\\d+)?\\b)");
+  const blt = (cfg.builtin || "").split(/\s+/).filter(Boolean);
+  if (blt.length) parts.push("(\\b(?:" + blt.join("|") + ")\\b)");
+  const re = new RegExp(parts.join("|"), "g");
+  _reCache[key] = re;
+  return re;
+}
+function highlightCode(src, lang) {
+  const cfg = HIGHLIGHT_LANGS[lang] || HIGHLIGHT_LANGS.text;
+  const re = buildHighlightRe(cfg);
+  if (!re) return escapeHtml(src);
+  let out = "", last = 0, m;
+  re.lastIndex = 0;
+  while ((m = re.exec(src)) !== null) {
+    if (m.index === re.lastIndex) re.lastIndex++;
+    out += escapeHtml(src.slice(last, m.index));
+    let cls = "";
+    if (m[1]) cls = "tok-s";
+    else if (m[2]) cls = "tok-c";
+    else if (m[3]) cls = "tok-k";
+    else if (m[4]) cls = "tok-t";
+    else if (m[5]) cls = "tok-f";
+    else if (m[6]) cls = "tok-n";
+    else if (m[7]) cls = "tok-b";
+    if (cls) out += `<span class="${cls}">${escapeHtml(m[0])}</span>`;
+    else out += escapeHtml(m[0]);
+    last = m.index + m[0].length;
+  }
+  out += escapeHtml(src.slice(last));
+  return out;
+}
+function inlineMd(s) {
+  return escapeHtml(s)
+    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+function renderTableBlock(text) {
+  const lines = text.trim().split("\n");
+  if (lines.length < 2) return "";
+  const cells = l => l.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map(c => c.trim());
+  const isSep = l => /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+$/.test(l);
+  let html = '<div class="md-table"><table><thead><tr>';
+  html += cells(lines[0]).map(c => "<th>" + inlineMd(c) + "</th>").join("");
+  html += "</tr></thead><tbody>";
+  for (let i = 1; i < lines.length; i++) {
+    if (isSep(lines[i])) continue;
+    html += "<tr>" + cells(lines[i]).map(c => "<td>" + inlineMd(c) + "</td>").join("") + "</tr>";
+  }
+  return html + "</tbody></table></div>";
+}
 function renderMarkdown(text) {
   if (!text) return "";
   let html = escapeHtml(text);
 
-  // fenced code blocks first
+  // fenced code blocks first (with language detection + highlighting)
   const blocks = [];
-  html = html.replace(/```([\s\S]*?)```/g, (m, code) => {
+  html = html.replace(/```([\w-]*)[ \t]*\n?([\s\S]*?)```/g, (m, lang, code) => {
     const idx = blocks.length;
-    blocks.push(`<pre><code>${code}</code></pre>`);
+    blocks.push(`<pre><code class="lang-${lang || "txt"}">${highlightCode(code, lang || "text")}</code></pre>`);
     return `\u0000CODE${idx}\u0000`;
+  });
+
+  // markdown tables
+  const tables = [];
+  html = html.replace(/((?:^\|.*\|\s*$[\r\n]*)+)/gm, m => {
+    const idx = tables.length;
+    tables.push(renderTableBlock(m));
+    return `\u0000TBL${idx}\u0000`;
   });
 
   html = html.replace(/^### (.*)$/gm, "<h4>$1</h4>")
@@ -794,11 +1026,13 @@ function renderMarkdown(text) {
              .replace(/`([^`\n]+)`/g, "<code>$1</code>")
              .replace(/^\s*[-*] (.*)$/gm, "<p>• $1</p>")
              .replace(/^\s*\d+\. (.*)$/gm, "<p>$1</p>")
+             .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
              .replace(/\n{2,}/g, "</p><p>")
              .replace(/\n/g, "<br>");
 
   html = `<p>${html}</p>`;
 
+  html = html.replace(/\u0000TBL(\d+)\u0000/g, (m, i) => tables[+i]);
   html = html.replace(/\u0000CODE(\d+)\u0000/g, (m, i) => blocks[+i]);
   return html;
 }
@@ -873,7 +1107,7 @@ document.getElementById("btnIndex").addEventListener("click", async () => {
   btn.disabled = true;
   spin.style.display = "inline-block";
   try {
-    const res = await fetch("/api/index", { method: "POST" });
+    const res = await fetchApi("/api/index", { method: "POST" });
     const data = await res.json();
     if (data.error) { setStatus("index failed", false); }
     else { statusText.textContent = `indexed: ${data.count} chunks`; statusDot.style.background = "var(--green)"; }
@@ -888,7 +1122,7 @@ document.getElementById("btnIndex").addEventListener("click", async () => {
 // ── Diff modal ──────────────────────────────
 document.getElementById("btnDiff").addEventListener("click", async () => {
   try {
-    const res = await fetch("/api/diff");
+    const res = await fetchApi("/api/diff");
     const data = await res.json();
     renderDiff(data.diff || "(No changes)");
     openModal("diffOverlay");
@@ -918,7 +1152,11 @@ document.querySelectorAll(".modal-overlay").forEach(ov => {
   ov.addEventListener("click", (e) => { if (e.target === ov) ov.classList.remove("open"); });
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") document.querySelectorAll(".modal-overlay").forEach(ov => ov.classList.remove("open"));
+  if (e.key === "Escape") {
+    document.querySelectorAll(".modal-overlay").forEach(ov => {
+      if (ov !== authOverlay) ov.classList.remove("open");
+    });
+  }
 });
 
 // ── Sidebar: tabs ───────────────────────────
@@ -935,7 +1173,7 @@ document.querySelectorAll(".tab").forEach(tab => {
 function loadFiles() {
   const container = document.getElementById("sideContent");
   container.innerHTML = '<div class="side-empty">Loading files…</div>';
-  fetch("/api/files").then(r => r.json()).then(data => {
+  fetchApi("/api/files").then(r => r.json()).then(data => {
     if (!data.tree || !data.tree.length) {
       container.innerHTML = '<div class="side-empty">Workspace is empty</div>';
       return;
@@ -981,13 +1219,13 @@ function renderFileNode(node, parent) {
 
 async function openFile(path) {
   try {
-    const res = await fetch("/api/files/read?path=" + encodeURIComponent(path));
+    const res = await fetchApi("/api/files/read?path=" + encodeURIComponent(path));
     const data = await res.json();
     if (data.error) { setStatus("read error", false); return; }
     document.getElementById("fileTitle").innerHTML =
       `<span>📄</span> ${escapeHtml(path)}<button class="modal-close" onclick="closeModal('fileOverlay')">×</button>`;
     const body = document.getElementById("fileBody");
-    body.innerHTML = `<pre style="margin:0;white-space:pre-wrap;word-break:break-word">${escapeHtml(data.content)}</pre>`;
+    body.innerHTML = `<pre style="margin:0"><code>${highlightCode(data.content, langForPath(path))}</code></pre>`;
     openModal("fileOverlay");
   } catch { setStatus("read error", false); }
 }
@@ -996,7 +1234,7 @@ async function openFile(path) {
 function loadSessions() {
   const container = document.getElementById("sideContent");
   container.innerHTML = '<div class="side-empty">Loading…</div>';
-  fetch("/api/sessions").then(r => r.json()).then(data => {
+  fetchApi("/api/sessions").then(r => r.json()).then(data => {
     const list = data.sessions || [];
     if (!list.length) {
       container.innerHTML = '<div class="side-empty">No saved sessions yet.</div>';

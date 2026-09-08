@@ -27,12 +27,10 @@ Config file example:
 """
 
 import os
-import sys
+from typing import Any
+
 import tomllib
-from typing import Any, Optional
-
 from dotenv import load_dotenv
-
 
 # Load .env first (doesn't override existing env vars)
 load_dotenv()
@@ -68,6 +66,11 @@ DEFAULTS: dict[str, Any] = {
         "network": "none",
         "timeout": 60,
     },
+    "web": {
+        "require_auth": False,
+        "token": "",
+        "allow_origins": [],
+    },
     "gemini": {
         "model": "gemini-2.0-flash",
     },
@@ -102,7 +105,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
 class Config:
     """Agentic IDE configuration with layered loading."""
 
-    def __init__(self, config_path: Optional[str] = None):
+    def __init__(self, config_path: str | None = None):
         # Load config file(s)
         loaded: dict[str, Any] = _deep_merge({}, DEFAULTS)
 
@@ -195,6 +198,28 @@ class Config:
         """True if GROQ_API_KEY is set."""
         return bool(os.environ.get("GROQ_API_KEY"))
 
+    @property
+    def web_require_auth(self) -> bool:
+        """Whether the web UI requires an API token."""
+        env = os.environ.get("AGENTIC_WEB_AUTH")
+        if env is not None:
+            return env.strip().lower() in ("1", "true", "yes", "on")
+        return bool(self.section("web").get("require_auth", False))
+
+    @property
+    def web_token(self) -> str:
+        """Web UI API token (env AGENTIC_WEB_TOKEN or [web].token)."""
+        return os.environ.get(
+            "AGENTIC_WEB_TOKEN",
+            self.section("web").get("token", ""),
+        ).strip()
+
+    @property
+    def web_allow_origins(self) -> list[str]:
+        """Allowed browser origins for CORS (empty = same-origin only)."""
+        origins = self.section("web").get("allow_origins", []) or []
+        return [str(o) for o in origins if str(o).strip()]
+
     def validate(self) -> list[str]:
         """Return list of missing critical config warnings."""
         warnings = []
@@ -216,7 +241,7 @@ class Config:
         return warnings
 
 
-_config: Optional[Config] = None
+_config: Config | None = None
 
 
 def get_config() -> Config:
@@ -262,6 +287,11 @@ memory = "512m"
 cpus = "2"
 network = "none"
 timeout = 60
+
+[web]
+require_auth = false
+# token = "change-me"        # or set AGENTIC_WEB_TOKEN in .env
+# allow_origins = ["http://localhost:3000"]
 
 [session]
 dir = "./.sessions"

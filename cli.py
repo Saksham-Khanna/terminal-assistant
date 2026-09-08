@@ -441,6 +441,16 @@ def web(host, port, reload):
     print_header(f"Agentic IDE Web UI")
     print_info(f"  URL:   http://{host}:{port}")
     print_info(f"  Ctrl+C to stop")
+
+    public_host = host in ("0.0.0.0", "::", "")
+    if public_host and not get_config().web_require_auth:
+        print_warning(
+            f"  WARNING: binding to '{host}' exposes the web UI (and its file/shell access) "
+            "to your whole network. "
+            "Set AGENTIC_WEB_AUTH=true + AGENTIC_WEB_TOKEN=<key> in .env to protect it."
+        )
+    elif not public_host and get_config().web_require_auth:
+        print_info(f"  Auth:   API token required (every /api/* call and the chat socket)")
     click.echo()
     run_server(host=host, port=port, reload=reload)
 
