@@ -15,7 +15,6 @@ import ast
 import glob
 import os
 import re
-import subprocess
 
 from agent.config import get_config
 
@@ -268,19 +267,8 @@ def _run_shell_command(command: str, auto_confirm: bool = False) -> str:
         answer = input(f"\n  Agent wants to run: {command}\n  Allow? [y/N] ").strip().lower()
         if answer != "y":
             return "Command blocked by user."
-    try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            cwd=WORKSPACE_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        output = result.stdout + result.stderr
-        return output.strip() or "(command produced no output)"
-    except subprocess.TimeoutExpired:
-        return "Error: command timed out after 60s"
+    from agent.sandbox import run_sandboxed
+    return run_sandboxed(command, cwd=WORKSPACE_ROOT)
 
 
 def _search_codebase(query: str, top_k: int = 5) -> str:

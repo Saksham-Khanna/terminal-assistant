@@ -60,6 +60,14 @@ DEFAULTS: dict[str, Any] = {
         "max_retries": 3,
         "backoff_base": 1.0,
     },
+    "sandbox": {
+        "enabled": True,
+        "image": "python:3.12-slim",
+        "memory": "512m",
+        "cpus": "2",
+        "network": "none",
+        "timeout": 60,
+    },
     "gemini": {
         "model": "gemini-2.0-flash",
     },
@@ -246,6 +254,14 @@ rpm = 15
 min_interval = 0.5
 max_retries = 3
 backoff_base = 1.0
+
+[sandbox]
+enabled = true
+image = "python:3.12-slim"
+memory = "512m"
+cpus = "2"
+network = "none"
+timeout = 60
 
 [session]
 dir = "./.sessions"
