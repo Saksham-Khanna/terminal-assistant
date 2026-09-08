@@ -29,12 +29,12 @@ def test_import_core():
 def test_tool_schemas_structure():
     """Test that tool schemas have required fields."""
     from agent.tools import TOOL_SCHEMAS
-    
+
     for tool in TOOL_SCHEMAS:
         assert "name" in tool, f"Tool missing 'name': {tool}"
         assert "description" in tool, f"Tool missing 'description': {tool}"
         assert "input_schema" in tool, f"Tool missing 'input_schema': {tool}"
-        
+
         schema = tool["input_schema"]
         assert "type" in schema, f"Schema missing 'type': {tool['name']}"
         assert "properties" in schema, f"Schema missing 'properties': {tool['name']}"
