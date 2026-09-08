@@ -1,0 +1,444 @@
+"""
+The agent loop.
+
+This is the whole "brain" of the system: send messages -> get a response ->
+if the model asked to use a tool, run it and feed the result back -> repeat
+until the model replies with plain text (no more tool calls) or we hit the
+safety cap on iterations.
+
+Gemini's conversation format: a list of `types.Content` objects, each with
+a role ("user" or "model") and a list of `Part`s. A tool call from the model
+shows up as a function_call Part inside a "model" turn; you answer it with a
+function_response Part inside the next "user" turn. Conceptually identical
+to Claude's tool_use/tool_result — just different object names.
+"""
+
+import concurrent.futures
+import json
+import time
+from typing import Generator, Optional
+
+from google.genai import types
+
+from agent.llm import LLMClient
+from agent.tools import TOOL_SCHEMAS, execute_tool
+from agent.config import get_config
+from agent.summarizer import (
+    should_summarize_gemini,
+    should_summarize_groq,
+    summarize_gemini,
+    summarize_groq,
+)
+from agent.eval import ResponseEvaluator, EvaluationResult, format_evaluation
+from agent.eval_history import record_evaluation
+from agent.session import SessionManager
+from agent.checkpoint import CheckpointManager
+from agent.ui import tool_call_line, print_spinner, console
+from agent.cost import (
+    SessionUsage,
+    estimate_gemini_tokens,
+    estimate_groq_tokens,
+)
+
+SYSTEM_PROMPT = """You are an autonomous coding agent operating inside a sandboxed workspace.
+
+You have tools to read/write files, list directories, run shell commands, and
+semantically search an indexed codebase. Use them to accomplish the user's task.
+
+Guidelines:
+- Investigate before acting: read relevant files or search the codebase before writing code.
+- Make minimal, targeted changes. For small changes to an existing file, prefer
+  the edit_file tool (surgical, reviewable diff) over write_file. Only use
+  write_file when creating a new file or rewriting the whole file.
+- After making a change, verify it (e.g. run tests or the affected script) when possible.
+- When you're done, reply with a plain-text summary of what you did. Do not call
+  any more tools once the task is complete.
+- Note: Long conversations may be compressed automatically. Previous messages might
+  appear as a summary. Always re-read files if you need fresh context rather than
+  assuming you remember their contents from earlier.
+"""
+
+MAX_ITERATIONS = 25
+
+
+class Agent:
+    def __init__(self, session_id: Optional[str] = None, enable_evaluation: bool = True):
+        self.llm = LLMClient()
+        self.provider = get_config().provider
+        self.contents: list[types.Content] = []
+        self.groq_messages: list = []
+        self.system = SYSTEM_PROMPT
+
+        # Session & Checkpointing
+        self.session_mgr = SessionManager()
+        self.checkpoint_mgr = CheckpointManager()
+        self.session_id = session_id
+        self.initial_query = ""
+
+        if session_id:
+            self.load_session(session_id)
+
+        # Evaluation tracking
+        self.enable_evaluation = enable_evaluation
+        self.evaluator = ResponseEvaluator() if enable_evaluation else None
+        self.context_chunks_used: list[str] = []
+        self.tools_called: list[dict] = []
+
+        # Usage / cost tracking
+        self.usage = SessionUsage()
+        self._iteration = 0
+
+        # Observers get notified on tool calls (for external UI)
+        self.tool_observers: list = []
+
+    def _append_user(self, text: str):
+        if not self.initial_query:
+            self.initial_query = text
+        if self.provider == "groq":
+            self.groq_messages.append({"role": "user", "content": text})
+        else:
+            self.contents.append(
+                types.Content(role="user", parts=[types.Part.from_text(text=text)])
+            )
+
+    def _append_model(self, text: str):
+        if self.provider == "groq":
+            self.groq_messages.append({"role": "assistant", "content": text})
+        else:
+            self.contents.append(
+                types.Content(role="model", parts=[types.Part.from_text(text=text)])
+            )
+
+    def save_session(self, session_id: Optional[str] = None, title: Optional[str] = None) -> str:
+        """Persist current conversation history to disk."""
+        return self.session_mgr.save(self, session_id=session_id, title=title)
+
+    def load_session(self, session_id: str) -> bool:
+        """Load conversation history from disk."""
+        return self.session_mgr.load(self, session_id)
+
+    def undo_last_checkpoint(self) -> tuple[bool, str]:
+        """Rollback the workspace to the previous commit/checkpoint."""
+        return self.checkpoint_mgr.undo_last_checkpoint()
+
+    def get_workspace_diff(self) -> str:
+        """Get git diff of current workspace changes."""
+        return self.checkpoint_mgr.get_workspace_diff()
+
+    def get_checkpoint_history(self, limit: int = 5) -> list[dict]:
+        """Get list of recent checkpoints."""
+        return self.checkpoint_mgr.get_history(limit)
+
+    def reset(self):
+        """Clear conversation history and start fresh."""
+        self.contents = []
+        self.groq_messages = []
+        self.context_chunks_used = []
+        self.tools_called = []
+        self.initial_query = ""
+        self.usage = SessionUsage()
+        self._iteration = 0
+
+    def _record_usage(self, response) -> None:
+        """Record token usage for the latest LLM call."""
+        if self.provider == "groq":
+            prompt_tokens, output_tokens = estimate_groq_tokens(response)
+        else:
+            prompt_tokens, output_tokens = estimate_gemini_tokens(response)
+
+        model = (
+            get_config().groq_model
+            if self.provider == "groq"
+            else get_config().gemini_model
+        )
+
+        if prompt_tokens or output_tokens:
+            self.usage.record_call(
+                provider=self.provider,
+                model=model,
+                prompt_tokens=prompt_tokens,
+                output_tokens=output_tokens,
+                iteration=self._iteration,
+            )
+
+    def get_usage_summary(self) -> str:
+        """Return a human-readable usage summary for the current session."""
+        from agent.cost import format_usage
+        self.usage.tool_calls = len(self.tools_called)
+        self.usage.end_time = time.time()
+        return format_usage(self.usage)
+
+
+    def _maybe_summarize(self):
+        """Compress old messages if context is getting too long."""
+        if self.provider == "groq":
+            if should_summarize_groq(self.groq_messages):
+                self.groq_messages = summarize_groq(
+                    self.llm.client if hasattr(self.llm, "client") else None,
+                    self.groq_messages,
+                    self.system,
+                )
+        else:
+            if should_summarize_gemini(self.contents):
+                self.contents = summarize_gemini(
+                    self.llm.client,
+                    self.contents,
+                    self.system,
+                )
+
+    def run(self, user_task: str) -> tuple[str, Optional[EvaluationResult]]:
+        """
+        Run agent with evaluation.
+
+        Returns:
+            Tuple of (response_text, evaluation_result)
+        """
+        self._append_user(user_task)
+        self.context_chunks_used = []
+        self.tools_called = []
+
+        for iteration in range(1, MAX_ITERATIONS + 1):
+            self._iteration = iteration
+            self._maybe_summarize()
+
+            if self.provider == "groq":
+                self.llm.set_groq_messages(self.groq_messages)
+            with print_spinner("Agent thinking..."):
+                response = self.llm.call(
+                    contents=self.contents,
+                    system=self.system,
+                    tools=TOOL_SCHEMAS,
+                )
+
+            self._record_usage(response)
+
+            if self.provider == "groq":
+                result = self._run_groq_iteration(response)
+            else:
+                result = self._run_gemini_iteration(response)
+
+            if result is not None:
+                # Auto-save session if session_id is active
+                if self.session_id:
+                    self.save_session(self.session_id)
+                # Evaluate the final response
+                eval_result = None
+                if self.evaluator:
+                    eval_result = self.evaluator.evaluate(
+                        query=user_task,
+                        response=result,
+                        context_chunks=self.context_chunks_used,
+                        tools_called=self.tools_called,
+                    )
+                    if eval_result:
+                        record_evaluation(eval_result)
+                return result, eval_result
+
+        return "Stopped: hit the max iteration limit without finishing the task.", None
+
+    def run_stream(self, user_task: str) -> Generator[str | EvaluationResult, None, None]:
+        """
+        Stream agent response. Yields text chunks as they arrive.
+        Final yield is the EvaluationResult (if evaluation enabled).
+        """
+        self._append_user(user_task)
+        self.context_chunks_used = []
+        self.tools_called = []
+
+        for iteration in range(1, MAX_ITERATIONS + 1):
+            self._maybe_summarize()
+
+            if self.provider == "groq":
+                self.llm.set_groq_messages(self.groq_messages)
+
+            # Use streaming
+            accumulated_text = ""
+            tool_calls = []
+
+            for chunk in self.llm.stream(
+                contents=self.contents,
+                system=self.system,
+                tools=TOOL_SCHEMAS,
+            ):
+                if chunk["type"] == "text":
+                    accumulated_text += chunk["data"]
+                    yield chunk["data"]
+                elif chunk["type"] == "tool_call":
+                    tool_calls.append(chunk["data"])
+
+            # Record usage (streaming - rough char-based estimate)
+            from agent.cost import estimate_tokens_char_fallback
+            from agent.cost import PRICING
+            pricing = PRICING.get(self.provider, PRICING["gemini"])
+            prompt_text = "".join(
+                p.text for c in self.contents for p in c.parts if getattr(p, "text", None)
+            ) if self.provider != "groq" else ""
+            if self.provider == "groq":
+                prompt_tokens = estimate_tokens_char_fallback(
+                    "".join(m.get("content", "") for m in self.groq_messages if isinstance(m.get("content"), str))
+                )
+            else:
+                prompt_tokens = estimate_tokens_char_fallback(prompt_text)
+            output_tokens = estimate_tokens_char_fallback(accumulated_text)
+            self.usage.record_call(
+                provider=self.provider,
+                model=(get_config().groq_model if self.provider == "groq" else get_config().gemini_model),
+                prompt_tokens=prompt_tokens,
+                output_tokens=output_tokens,
+                iteration=iteration,
+            )
+
+            # If no tool calls, we're done
+            if not tool_calls:
+                if accumulated_text:
+                    self._append_model(accumulated_text)
+
+                # Auto-save session if session_id is active
+                if self.session_id:
+                    self.save_session(self.session_id)
+
+                # Evaluate final response
+                if self.evaluator and accumulated_text:
+                    eval_result = self.evaluator.evaluate(
+                        query=user_task,
+                        response=accumulated_text,
+                        context_chunks=self.context_chunks_used,
+                        tools_called=self.tools_called,
+                    )
+                    if eval_result:
+                        record_evaluation(eval_result)
+                        yield eval_result
+                return
+
+            # Handle tool calls
+            if accumulated_text:
+                self._append_model(accumulated_text)
+
+            # Execute tools
+            response_parts = []
+            for tc in tool_calls:
+                name = tc["name"]
+                try:
+                    args = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                except json.JSONDecodeError:
+                    args = {}
+                print(f"\n")
+                tool_call_line(name, args)
+                self.tools_called.append({"name": name, "args": args})
+                for obs in self.tool_observers:
+                    try:
+                        obs(name, dict(args))
+                    except Exception:
+                        pass
+                result_text = execute_tool(name, args)
+
+                # Track RAG context if search_codebase was used
+                if name == "search_codebase" and result_text and not result_text.startswith("Error"):
+                    self.context_chunks_used.append(result_text[:500])  # Store preview
+
+                response_parts.append(
+                    types.Part.from_function_response(
+                        name=name,
+                        response={"result": result_text},
+                    )
+                )
+
+            self.contents.append(types.Content(role="user", parts=response_parts))
+
+        yield "\nStopped: hit the max iteration limit without finishing the task."
+
+    def _run_gemini_iteration(self, response):
+        candidate = response.candidates[0]
+        model_content = candidate.content
+        self.contents.append(model_content)
+
+        function_calls = [
+            part.function_call for part in model_content.parts
+            if getattr(part, "function_call", None)
+        ]
+
+        if not function_calls:
+            text_parts = [
+                part.text for part in model_content.parts
+                if getattr(part, "text", None)
+            ]
+            return "\n".join(text_parts)
+
+        response_parts = []
+
+        for fc in function_calls:
+            tool_call_line(fc.name, dict(fc.args))
+            self.tools_called.append({"name": fc.name, "args": dict(fc.args)})
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+            future_to_fc = {
+                executor.submit(execute_tool, fc.name, dict(fc.args)): fc
+                for fc in function_calls
+            }
+            for future in concurrent.futures.as_completed(future_to_fc):
+                fc = future_to_fc[future]
+                try:
+                    result_text = future.result()
+                except Exception as e:
+                    result_text = f"Error: {e}"
+                if fc.name == "search_codebase" and not result_text.startswith("Error"):
+                    self.context_chunks_used.append(result_text[:500])
+                response_parts.append(
+                    types.Part.from_function_response(
+                        name=fc.name,
+                        response={"result": result_text},
+                    )
+                )
+
+        self.contents.append(types.Content(role="user", parts=response_parts))
+        return None
+
+    def _run_groq_iteration(self, response):
+        message = response.get("choices", [{}])[0].get("message", {})
+        content = message.get("content") or ""
+        tool_calls = message.get("tool_calls") or []
+
+        # Build assistant message with tool calls for the conversation history
+        assistant_msg = {"role": "assistant", "content": content}
+        if tool_calls:
+            groq_tool_calls = []
+            for tc in tool_calls:
+                groq_tool_calls.append({
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tc["function"]["name"],
+                        "arguments": tc["function"]["arguments"],
+                    },
+                })
+            assistant_msg["tool_calls"] = groq_tool_calls
+        self.groq_messages.append(assistant_msg)
+
+        if not tool_calls:
+            return content.strip() if content else "(no response)"
+
+        # Execute tools and feed results back
+        import json
+        tool_result_msgs = []
+        for tc in tool_calls:
+            name = tc["function"]["name"]
+            try:
+                args = json.loads(tc["function"]["arguments"])
+            except json.JSONDecodeError:
+                args = {}
+            tool_call_line(name, args)
+            self.tools_called.append({"name": name, "args": args})
+            result_text = execute_tool(name, args)
+            if name == "search_codebase" and not result_text.startswith("Error"):
+                self.context_chunks_used.append(result_text[:500])
+            tool_result_msgs.append({
+                "role": "tool",
+                "tool_call_id": tc["id"],
+                "content": result_text,
+            })
+
+        self.groq_messages.extend(tool_result_msgs)
+
+        # Also keep Gemini-style contents in sync for LLMClient
+        # (LLMClient's _call_groq reads from self.contents; store messages there too)
+        return None

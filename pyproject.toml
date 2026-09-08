@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentic-ide"
+version = "0.1.0"
+description = "Terminal-based AI coding agent with tool grounding and RAG"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Your Name", email = "you@example.com"}
+]
+keywords = ["ai", "coding-agent", "rag", "llm", "gemini", "groq"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+]
+
+dependencies = [
+    "google-genai>=0.3.0",
+    "python-dotenv>=1.0.0",
+    "chromadb>=0.5.0",
+    "sentence-transformers>=3.0.0",
+    "tree-sitter>=0.25.0",
+    "tree-sitter-python>=0.25.0",
+    "httpx>=0.25.0",
+    "click>=8.0",
+    "rich>=13.0",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff>=0.1.0",
+]
+rich = [
+    "rich>=13.0",
+]
+all = [
+    "agentic-ide[dev,rich]",
+]
+
+[project.scripts]
+agentic = "agentic_ide.cli:entry"
+
+[project.urls]
+Repository = "https://github.com/yourusername/agentic-ide"
+
+[tool.setuptools.packages.find]
+include = ["agent*", "rag*", "agentic_ide*", "webapp*"]
+
+[tool.setuptools.package-data]
+webapp = ["static/*.html", "static/*.css", "static/*.js"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
