@@ -162,6 +162,88 @@ def setup():
 
 
 @cli.command()
+@click.option("--workspace", default=None,
+              help="Workspace directory to create (default: from config)")
+@click.option("--force", is_flag=True, help="Recreate .env from template even if it already exists")
+def init(workspace, force):
+    """Scaffold a project: workspace, config, .env, and gitignore in one shot."""
+    config = Config()
+
+    # 1. Workspace directory
+    ws = os.path.abspath(workspace or config.workspace_root)
+    if not os.path.exists(ws):
+        os.makedirs(ws, exist_ok=True)
+        print_success(f"Created workspace: {ws}")
+    else:
+        print_info(f"Workspace already exists: {ws}")
+
+    # 2. Sessions directory
+    sess = os.path.abspath(config.session_dir)
+    if not os.path.exists(sess):
+        os.makedirs(sess, exist_ok=True)
+        print_success(f"Created sessions dir: {sess}")
+    else:
+        print_info(f"Sessions dir already exists: {sess}")
+
+    # 3. Config file
+    cfg_path = create_default_config()
+    print_success(f"Config file ready: {cfg_path}")
+
+    # 4. .env (from template or inline fallback)
+    env_path = os.path.abspath(".env")
+    if os.path.exists(env_path) and not force:
+        print_info(f".env already exists, leaving untouched: {env_path}")
+    else:
+        tpl = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env.example")
+        if os.path.exists(tpl):
+            import shutil
+            shutil.copyfile(tpl, env_path)
+        else:
+            with open(env_path, "w", encoding="utf-8") as f:
+                f.write("# Free key: https://aistudio.google.com/apikey\n")
+                f.write("GEMINI_API_KEY=your-api-key-here\n\n")
+                f.write("# Or Groq (free + fast): https://console.groq.com\n")
+                f.write("# MODEL_PROVIDER=groq\n")
+                f.write("# GROQ_API_KEY=your-groq-key-here\n")
+        print_success(f".env written (add your API key): {env_path}")
+
+    # 5. .gitignore entries
+    _ensure_gitignore_entries(os.path.abspath(".gitignore"), [
+        ".env",
+        ".sessions/",
+        "*.egg-info/",
+        "__pycache__/",
+        ".pytest_cache/",
+        ".ruff_cache/",
+    ])
+
+    # 6. Summary
+    click.echo()
+    print_header("Project initialized")
+    missing = config.validate()
+    if missing:
+        for w in missing:
+            print_warning(w)
+    print_info("Next: add your API key in .env, then run `agentic index` and `agentic chat`.")
+
+
+def _ensure_gitignore_entries(path: str, entries: list[str]) -> None:
+    """Append missing entries to a .gitignore file, creating it if needed."""
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write("".join(f"{e}\n" for e in entries))
+        print_success(f"Created {path}")
+        return
+    with open(path, encoding="utf-8") as f:
+        existing = f.read().splitlines()
+    with open(path, "a", encoding="utf-8") as f:
+        for e in entries:
+            if e not in existing:
+                f.write(f"{e}\n")
+                print_success(f"Added '{e}' to {path}")
+
+
+@cli.command()
 def index():
     """Index the workspace for semantic search."""
     from rag.indexer import index_directory
