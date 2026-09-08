@@ -22,6 +22,7 @@ import urllib.error
 from google.genai import types
 
 from agent.config import get_config
+from agent.ratelimit import with_retries
 
 # Rough estimate: ~4 chars per token for English text.
 CHARS_PER_TOKEN = 4
@@ -100,15 +101,18 @@ def _summarize_via_gemini(
     prompt = f"{SUMMARIZE_PROMPT}\n\n--- Conversation ---\n{conv_text}\n--- End ---"
 
     try:
-        response = client.models.generate_content(
-            model=get_config().gemini_model,
-            contents=[
-                types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
-            ],
-            config=types.GenerateContentConfig(
-                max_output_tokens=SUMMARY_MAX_TOKENS,
-            ),
-        )
+        def _do_summarize():
+            return client.models.generate_content(
+                model=get_config().gemini_model,
+                contents=[
+                    types.Content(role="user", parts=[types.Part.from_text(text=prompt)])
+                ],
+                config=types.GenerateContentConfig(
+                    max_output_tokens=SUMMARY_MAX_TOKENS,
+                ),
+            )
+
+        response = with_retries(_do_summarize)
         return response.candidates[0].content.parts[0].text.strip()
     except Exception as e:
         print(f"  [summarize] Gemini summarization failed: {e}")
@@ -143,9 +147,12 @@ def _summarize_via_groq(messages: list[dict], system: str) -> str | None:
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return data["choices"][0]["message"]["content"].strip()
+        def _do_summarize():
+            with urllib.request.urlopen(req) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+
+        data = with_retries(_do_summarize)
+        return data["choices"][0]["message"]["content"].strip()
     except Exception as e:
         print(f"  [summarize] Groq summarization failed: {e}")
         return None

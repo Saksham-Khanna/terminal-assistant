@@ -54,6 +54,12 @@ DEFAULTS: dict[str, Any] = {
         "budget_tokens": 50000,
         "summarize_tail_turns": 6,
     },
+    "llm": {
+        "rpm": 15,
+        "min_interval": 0.5,
+        "max_retries": 3,
+        "backoff_base": 1.0,
+    },
     "gemini": {
         "model": "gemini-2.0-flash",
     },
@@ -234,6 +240,12 @@ root = "./workspace"
 [context]
 budget_tokens = 50000
 summarize_tail_turns = 6
+
+[llm]
+rpm = 15
+min_interval = 0.5
+max_retries = 3
+backoff_base = 1.0
 
 [session]
 dir = "./.sessions"

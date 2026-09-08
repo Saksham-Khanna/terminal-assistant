@@ -21,6 +21,7 @@ from google import genai
 from google.genai import types
 
 from agent.config import get_config
+from agent.ratelimit import with_retries, with_retries_stream
 
 _config = get_config()
 GEMINI_MODEL = _config.gemini_model
@@ -60,8 +61,11 @@ def _groq_request(messages: list, tools: list[dict], system: str, stream: bool =
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        def _do_request():
+            with urllib.request.urlopen(req) as resp:
+                return json.loads(resp.read().decode("utf-8"))
+
+        return with_retries(_do_request)
     except urllib.error.HTTPError as e:
         body = ""
         try:
@@ -78,7 +82,7 @@ def _groq_request(messages: list, tools: list[dict], system: str, stream: bool =
 
 
 def _groq_stream(messages: list, tools: list[dict], system: str) -> Generator[dict, None, None]:
-    """Yield SSE chunks from Groq streaming API."""
+    """Yield SSE chunks from Groq streaming API (retries only the connection)."""
     api_key = os.environ.get("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY not set")
@@ -99,20 +103,39 @@ def _groq_stream(messages: list, tools: list[dict], system: str) -> Generator[di
         "User-Agent": USER_AGENT,
     }
 
-    with httpx.Client(timeout=60.0) as client:
-        with client.stream("POST", GROQ_URL, json=payload, headers=headers) as resp:
+    def _open_stream():
+        client = httpx.Client(timeout=60.0)
+        stream = client.stream("POST", GROQ_URL, json=payload, headers=headers)
+        try:
+            resp = stream.__enter__()
             resp.raise_for_status()
-            for line in resp.iter_lines():
-                if not line:
+        except BaseException:
+            client.close()
+            raise
+        return client, resp
+
+    # Retrying mid-stream is risky (partial output already emitted), so the
+    # retry/backoff only covers establishing the initial connection.
+    client, resp = with_retries(_open_stream)
+
+    try:
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            if line == "data: [DONE]":
+                break
+            if line.startswith("data: "):
+                try:
+                    chunk = json.loads(line[6:])
+                    yield chunk
+                except json.JSONDecodeError:
                     continue
-                if line == "data: [DONE]":
-                    break
-                if line.startswith("data: "):
-                    try:
-                        chunk = json.loads(line[6:])
-                        yield chunk
-                    except json.JSONDecodeError:
-                        continue
+    finally:
+        try:
+            resp.__exit__(None, None, None)
+        except BaseException:
+            pass
+        client.close()
 
 
 class LLMClient:
@@ -153,18 +176,20 @@ class LLMClient:
             for t in tools
         ]
 
-        response = self.client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system,
-                tools=[types.Tool(function_declarations=function_declarations)],
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                    disable=True
+        def _do_call():
+            return self.client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=system,
+                    tools=[types.Tool(function_declarations=function_declarations)],
+                    automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                        disable=True
+                    ),
                 ),
-            ),
-        )
-        return response
+            )
+
+        return with_retries(_do_call)
 
     # --- Groq implementation ---
     def _call_groq(self, contents, system, tools):
@@ -283,8 +308,8 @@ class LLMClient:
             tc = tool_calls_acc[idx]
             yield {"type": "tool_call", "data": tc}
 
-    def _stream_gemini(self, contents, system, tools):
-        """Stream from Gemini, yielding text chunks and complete tool calls."""
+    def _gemini_stream_factory(self, contents, system, tools):
+        """Return the raw Gemini streaming generator (factory for retry wrapper)."""
         function_declarations = [
             {
                 "name": t["name"],
@@ -293,8 +318,7 @@ class LLMClient:
             }
             for t in tools
         ]
-
-        for chunk in self.client.models.generate_content(
+        return self.client.models.generate_content(
             model=GEMINI_MODEL,
             contents=contents,
             config=types.GenerateContentConfig(
@@ -305,7 +329,13 @@ class LLMClient:
                 ),
             ),
             stream=True,
-        ):
+        )
+
+    def _stream_gemini(self, contents, system, tools):
+        """Stream from Gemini, yielding text chunks and complete tool calls."""
+        stream = with_retries_stream(self._gemini_stream_factory, contents, system, tools)
+
+        for chunk in stream:
             if not chunk.candidates:
                 continue
             candidate = chunk.candidates[0]

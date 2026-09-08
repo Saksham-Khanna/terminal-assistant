@@ -142,14 +142,18 @@ class ResponseEvaluator:
         try:
             # Make evaluation LLM call
             from google.genai import types
+            from agent.ratelimit import with_retries
 
-            eval_response = self.llm.client.models.generate_content(
-                model=EVAL_MODEL,
-                contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
-                config=types.GenerateContentConfig(
-                    temperature=0.1,  # Low temperature for consistent scoring
-                ),
-            )
+            def _do_eval():
+                return self.llm.client.models.generate_content(
+                    model=EVAL_MODEL,
+                    contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,  # Low temperature for consistent scoring
+                    ),
+                )
+
+            eval_response = with_retries(_do_eval)
 
             # Parse response
             response_text = eval_response.candidates[0].content.parts[0].text
