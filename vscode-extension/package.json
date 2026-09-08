@@ -1,0 +1,114 @@
+{
+  "name": "agentic-ide",
+  "displayName": "Agentic IDE",
+  "description": "AI coding assistant with chat, file editing, diff view — powered by your own agent backend",
+  "version": "0.1.0",
+  "publisher": "agentic-ide",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Machine Learning", "Programming Languages", "Other"],
+  "activationEvents": [
+    "onView:agentic-chat"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentic-panel",
+          "title": "Agentic IDE",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "agentic-panel": [
+        {
+          "type": "webview",
+          "id": "agentic-chat",
+          "name": "Agent Chat"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "agentic.openChat",
+        "title": "Agentic: Open Chat Panel"
+      },
+      {
+        "command": "agentic.startBackend",
+        "title": "Agentic: Start Backend Server"
+      },
+      {
+        "command": "agentic.stopBackend",
+        "title": "Agentic: Stop Backend Server"
+      },
+      {
+        "command": "agentic.sendSelection",
+        "title": "Agentic: Send Selection to Agent"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "agentic.sendSelection",
+          "when": "editorHasSelection",
+          "group": "agentic"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Agentic IDE",
+      "properties": {
+        "agentic.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "URL of the Agentic IDE backend server"
+        },
+        "agentic.backendToken": {
+          "type": "string",
+          "default": "",
+          "description": "Bearer token for backend auth (leave empty for no auth)"
+        },
+        "agentic.autoStartBackend": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the backend server when the extension activates"
+        },
+        "agentic.pythonPath": {
+          "type": "string",
+          "default": "python",
+          "description": "Path to the Python executable for the backend"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "npm run build:webview && npm run build:extension",
+    "build:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap",
+    "build:webview": "vite build",
+    "watch:extension": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --sourcemap --watch",
+    "watch:webview": "vite build --watch",
+    "lint": "tsc --noEmit && tsc --noEmit -p tsconfig.webview.json"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/react": "^18.2.48",
+    "@types/react-dom": "^18.2.18",
+    "@types/vscode": "^1.85.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.3.3",
+    "vite": "^6.0.0"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0",
+    "monaco-editor": "^0.52.0",
+    "@monaco-editor/react": "^4.6.0"
+  }
+}

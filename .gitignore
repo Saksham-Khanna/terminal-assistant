@@ -11,3 +11,5 @@ rag_db/
 workspace/
 venv/
 .venv/
+vscode-extension/node_modules/
+vscode-extension/out/

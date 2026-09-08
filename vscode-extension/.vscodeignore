@@ -1,0 +1,11 @@
+# Dependencies
+node_modules/
+
+# Source files (only ship compiled output)
+src/
+webview/
+*.ts
+*.tsx
+tsconfig*.json
+vite.config.ts
+.gitignore

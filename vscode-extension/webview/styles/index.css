@@ -1,0 +1,930 @@
+/* ==========================================================================
+   Agentic IDE Webview Stylesheet
+   Designed specifically for VS Code theme compatibility & high aesthetics
+   ========================================================================== */
+
+:root {
+  --primary-accent: var(--vscode-button-background, #0e639c);
+  --primary-accent-hover: var(--vscode-button-hoverBackground, #1177bb);
+  --primary-fg: var(--vscode-button-foreground, #ffffff);
+  --bg-main: var(--vscode-sideBar-background, var(--vscode-editor-background, #1e1e1e));
+  --bg-editor: var(--vscode-editor-background, #1e1e1e);
+  --fg-main: var(--vscode-editor-foreground, #cccccc);
+  --fg-muted: var(--vscode-descriptionForeground, #8c8c8c);
+  --border-color: var(--vscode-panel-border, var(--vscode-sideBarSectionHeader-border, rgba(128, 128, 128, 0.2)));
+  --input-bg: var(--vscode-input-background, #252526);
+  --input-fg: var(--vscode-input-foreground, #cccccc);
+  --input-border: var(--vscode-input-border, transparent);
+  --focus-border: var(--vscode-focusBorder, #007fd4);
+  --card-bg: var(--vscode-editorWidget-background, rgba(255, 255, 255, 0.04));
+  --card-border: var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.2));
+  --badge-bg: var(--vscode-badge-background, #4d4d4d);
+  --badge-fg: var(--vscode-badge-foreground, #ffffff);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  font-size: var(--vscode-font-size, 13px);
+  color: var(--fg-main);
+  background-color: var(--bg-main);
+}
+
+/* --------------------------------------------------------------------------
+   App Layout
+   -------------------------------------------------------------------------- */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.app-tabs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-main);
+  padding: 0 8px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.tab-list {
+  display: flex;
+  gap: 4px;
+}
+
+.tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--fg-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease-in-out;
+}
+
+.tab-btn:hover {
+  color: var(--fg-main);
+}
+
+.tab-btn.active {
+  color: var(--fg-main);
+  border-bottom-color: var(--primary-accent);
+}
+
+.tab-icon {
+  font-size: 14px;
+}
+
+.app-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  position: relative;
+}
+
+/* --------------------------------------------------------------------------
+   Buttons & Toolbars
+   -------------------------------------------------------------------------- */
+.toolbar-btn {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--fg-main);
+  padding: 4px 10px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.toolbar-btn:hover:not(:disabled) {
+  background-color: var(--primary-accent);
+  color: var(--primary-fg);
+  border-color: var(--primary-accent);
+}
+
+.toolbar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-btn.primary-btn {
+  background-color: var(--primary-accent);
+  color: var(--primary-fg);
+  border-color: var(--primary-accent);
+}
+
+.toolbar-btn.primary-btn:hover:not(:disabled) {
+  background-color: var(--primary-accent-hover);
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+
+.icon-btn:hover:not(:disabled) {
+  color: var(--fg-main);
+}
+
+/* --------------------------------------------------------------------------
+   Chat Panel
+   -------------------------------------------------------------------------- */
+.chat-panel {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.chat-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-main);
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-empty {
+  margin: auto;
+  text-align: center;
+  color: var(--fg-muted);
+  max-width: 280px;
+  padding: 24px 12px;
+}
+
+.chat-empty-icon {
+  font-size: 36px;
+  margin-bottom: 10px;
+}
+
+.chat-empty-hint {
+  font-size: 11px;
+  margin-top: 8px;
+  opacity: 0.8;
+  font-style: italic;
+}
+
+.chat-input-area {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-main);
+  flex-shrink: 0;
+}
+
+.chat-input {
+  flex: 1;
+  background-color: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--input-border);
+  border-radius: 4px;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: none;
+  min-height: 36px;
+  max-height: 150px;
+  line-height: 1.4;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.chat-input:focus {
+  border-color: var(--focus-border);
+}
+
+.chat-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.chat-send-btn {
+  background-color: var(--primary-accent);
+  color: var(--primary-fg);
+  border: none;
+  border-radius: 4px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
+}
+
+.chat-send-btn:hover:not(:disabled) {
+  background-color: var(--primary-accent-hover);
+}
+
+.chat-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* --------------------------------------------------------------------------
+   Message Bubbles
+   -------------------------------------------------------------------------- */
+.message-bubble {
+  border-radius: 6px;
+  padding: 10px 12px;
+  max-width: 96%;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.message-user {
+  align-self: flex-end;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--primary-accent);
+}
+
+.message-agent {
+  align-self: flex-start;
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--vscode-editorWarning-foreground, #cca700);
+}
+
+.message-role {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+}
+
+.message-content {
+  font-size: 13px;
+}
+
+.message-content p {
+  margin-bottom: 8px;
+}
+
+.message-content p:last-child {
+  margin-bottom: 0;
+}
+
+.inline-code {
+  background-color: rgba(128, 128, 128, 0.15);
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-family: var(--vscode-editor-font-family, Consolas, monospace);
+  font-size: 12px;
+}
+
+.code-block {
+  background-color: var(--bg-editor);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  margin: 8px 0;
+  overflow: hidden;
+}
+
+.code-block-header {
+  background-color: rgba(128, 128, 128, 0.1);
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--fg-muted);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.code-block pre {
+  padding: 8px 10px;
+  overflow-x: auto;
+  font-family: var(--vscode-editor-font-family, Consolas, monospace);
+  font-size: 12px;
+}
+
+.markdown-table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.markdown-table th, .markdown-table td {
+  border: 1px solid var(--border-color);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.markdown-table th {
+  background-color: rgba(128, 128, 128, 0.1);
+}
+
+.streaming-cursor {
+  display: inline-block;
+  animation: blink 0.8s infinite;
+  color: var(--primary-accent);
+  margin-left: 2px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   Tool Call Cards
+   -------------------------------------------------------------------------- */
+.message-tool-calls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tool-call-card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.tool-call-card:hover {
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+.tool-call-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-call-badge {
+  color: #ffffff;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: monospace;
+  text-transform: uppercase;
+}
+
+.tool-call-args-preview {
+  flex: 1;
+  color: var(--fg-muted);
+  font-family: monospace;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-call-chevron {
+  color: var(--fg-muted);
+  font-size: 10px;
+}
+
+.tool-call-details {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool-call-section strong {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+.tool-call-section pre {
+  background-color: var(--bg-editor);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 6px 8px;
+  font-family: monospace;
+  font-size: 11px;
+  overflow-x: auto;
+  max-height: 200px;
+  margin-top: 4px;
+  white-space: pre-wrap;
+}
+
+/* --------------------------------------------------------------------------
+   Status Bar
+   -------------------------------------------------------------------------- */
+.status-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-label {
+  color: var(--fg-muted);
+}
+
+.status-usage {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--fg-muted);
+  font-size: 10px;
+}
+
+/* --------------------------------------------------------------------------
+   Session Picker
+   -------------------------------------------------------------------------- */
+.session-picker {
+  position: relative;
+}
+
+.session-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-save-row {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  z-index: 100;
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 6px;
+  display: flex;
+  gap: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.session-save-input {
+  background-color: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--input-border);
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  outline: none;
+  width: 160px;
+}
+
+.session-save-input:focus {
+  border-color: var(--focus-border);
+}
+
+.session-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  z-index: 100;
+  background-color: var(--bg-main);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  width: 240px;
+  max-height: 280px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+}
+
+.session-dropdown-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.session-list {
+  overflow-y: auto;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.session-item {
+  padding: 6px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.session-item:hover {
+  background-color: var(--card-bg);
+}
+
+.session-item.active {
+  background-color: var(--primary-accent);
+  color: var(--primary-fg);
+}
+
+.session-item-title {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-item-meta {
+  font-size: 10px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+.session-empty, .session-loading {
+  padding: 12px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Files View Layout & Tree
+   -------------------------------------------------------------------------- */
+.files-view-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.files-sidebar {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-color);
+  background-color: var(--bg-main);
+  width: 200px;
+  min-width: 140px;
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: width 0.2s ease;
+}
+
+.files-sidebar.collapsed {
+  width: 32px;
+  min-width: 32px;
+}
+
+.sidebar-toggle-row {
+  display: flex;
+  padding: 4px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.sidebar-toggle-btn:hover {
+  color: var(--fg-main);
+}
+
+.file-tree-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.file-tree-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.file-tree-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--fg-muted);
+}
+
+.file-tree-search {
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--border-color);
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.file-search-input {
+  width: 100%;
+  background-color: var(--input-bg);
+  color: var(--input-fg);
+  border: 1px solid var(--input-border);
+  padding: 4px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  outline: none;
+}
+
+.file-search-input:focus {
+  border-color: var(--focus-border);
+}
+
+.file-search-clear {
+  position: absolute;
+  right: 10px;
+  background: transparent;
+  border: none;
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.file-tree-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 12px;
+  transition: background-color 0.1s;
+}
+
+.file-tree-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.file-tree-item.selected {
+  background-color: var(--primary-accent);
+  color: var(--primary-fg);
+}
+
+.file-tree-arrow {
+  font-size: 9px;
+  width: 12px;
+  display: inline-block;
+  color: var(--fg-muted);
+}
+
+.file-tree-icon {
+  font-size: 13px;
+}
+
+.file-tree-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree-size {
+  font-size: 10px;
+  color: var(--fg-muted);
+  margin-right: 4px;
+}
+
+.file-tree-msg {
+  padding: 12px;
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+.file-tree-msg.error {
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.files-editor-area {
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   File Editor
+   -------------------------------------------------------------------------- */
+.file-editor-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.file-editor-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background-color: var(--bg-main);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.file-editor-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.file-editor-path {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dirty-indicator {
+  color: var(--vscode-editorWarning-foreground, #cca700);
+  font-size: 10px;
+  margin-left: 2px;
+}
+
+.file-editor-lang {
+  font-size: 10px;
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  background-color: rgba(128, 128, 128, 0.15);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+.file-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.file-editor-status {
+  font-size: 11px;
+}
+
+.file-editor-status.success {
+  color: var(--vscode-testing-iconPassed, #4ec9b0);
+}
+
+.file-editor-status.error {
+  color: var(--vscode-errorForeground, #f14c4c);
+}
+
+.file-editor-monaco {
+  flex: 1;
+  overflow: hidden;
+}
+
+.file-editor-empty, .file-editor-loading {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+  text-align: center;
+  padding: 20px;
+}
+
+.file-editor-empty-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.file-editor-empty-hint {
+  font-size: 11px;
+  margin-top: 6px;
+  opacity: 0.8;
+}
+
+/* --------------------------------------------------------------------------
+   Diff Viewer
+   -------------------------------------------------------------------------- */
+.diff-viewer-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+.diff-viewer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background-color: var(--bg-main);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.diff-viewer-title {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.diff-viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.diff-viewer-content {
+  flex: 1;
+  overflow: hidden;
+}
+
+.diff-empty, .diff-loading {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+  text-align: center;
+  padding: 20px;
+}
+
+.diff-empty-icon {
+  font-size: 36px;
+  color: var(--vscode-testing-iconPassed, #4ec9b0);
+  margin-bottom: 10px;
+}
+
+.diff-empty-hint {
+  font-size: 11px;
+  margin-top: 6px;
+}
