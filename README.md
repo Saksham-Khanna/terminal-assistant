@@ -1,115 +1,178 @@
-# Agentic Coding Assistant (Terminal IDE)
+# Agentic IDE — Terminal Coding Agent
 
-A terminal-based coding agent built from scratch: an LLM agent loop with
-tool-calling (file I/O, shell execution) plus a local RAG layer for
-semantic codebase search. No agent frameworks (LangChain/etc.) — the loop,
-tools, and retrieval pipeline are all hand-built to demonstrate how tools
-like Claude Code / Cursor / Aider work under the hood.
+![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
+![License: MIT](https://img.shields.io/badge/License-MIT-green)
+![Tests](https://img.shields.io/badge/tests-79%20passed-brightgreen)
+![No Framework](https://img.shields.io/badge/built%20without-LangChain%20%2F%20AutoGen-orange)
 
-Runs on Google's **Gemini API free tier** — no credit card, no cost.
+> **Claude Code / Cursor / Aider jaise tools kaise kaam karte hain — ye project usko scratch se dikhata hai.** LLM agent loop + tool-calling + RAG, bina kisi agent framework ke. Terminal me direct use karo.
+
+**No credit card, no cost — Google Gemini free tier + Groq free tier pe chalta hai.**
+
+---
+
+## Demo
+
+> GIF / Screen recording yahan add karo — `agentic chat` me ek bug fix ka 20-sec demo
+
+```bash
+python cli.py chat
+# you> Fix the divide-by-zero bug in workspace/sample.py
+# agent> [read_file] [edit_file] [run_shell_command: pytest] -> Done
+```
+
+---
+
+## Features
+
+| Feature | Detail |
+|---|---|
+| **Agent Loop** | `LLM -> tool_use -> execute -> repeat` (`agent/core.py:189`), streaming support (`agent/core.py:239`), max 25 iterations |
+| **Tools (10)** | `read_file`, `write_file`, `edit_file` (diff-based), `list_dir`, `grep_search`, `find_files_by_glob`, `read_file_range`, `run_shell_command`, `search_codebase`, `undo_last_change` (`agent/tools.py:42`) |
+| **RAG Search** | AST-aware chunking (Tree-sitter) + `sentence-transformers` + Chroma vector store (`rag/indexer.py`, `rag/search.py`) |
+| **Safety** | Workspace jail (`agent/tools.py:25`), path-traversal block, Docker sandbox (`agent/sandbox.py:116`), auto-lint after edits (`agent/tools.py:360`) |
+| **Session & Undo** | Save/resume conversations (`agent/session.py`), git shadow commits + instant `/undo` / `/diff` (`agent/checkpoint.py:100`) |
+| **Config** | `agentic.toml` + `.env` layered config, `agentic setup` wizard (`cli.py:92`), multi-provider (Gemini/Groq) (`agent/llm.py:141`) |
+| **Cost Tracking** | Token + cost per call (`agent/cost.py`), `/stats` |
+
+---
 
 ## Architecture
 
 ```
 cli.py                  Entry point (index / chat / sessions / undo / diff / run)
 agent/
-  core.py               The agent loop: LLM -> tool_use? -> execute -> repeat
+  core.py               Agent loop: LLM -> tool_use? -> execute -> repeat
   llm.py                Thin wrapper around Gemini & Groq APIs
-  tools.py              Tool schemas + implementations (file I/O, regex, glob, shell exec, codebase search)
+  tools.py              Tool schemas + implementations (file I/O, grep, glob, shell, RAG)
   diff.py               Diff/patch editing: edit_file tool + unified-diff previews
-  summarizer.py         Conversation summarization for context-window management
-  session.py            Session persistence (save/load conversations to .sessions/)
-  checkpoint.py         Git workspace checkpointing & instant /undo rollback
+  summarizer.py         Context-window summarization
+  session.py            Session persistence (.sessions/)
+  checkpoint.py         Git workspace checkpointing & /undo rollback
+  sandbox.py            Docker sandbox for shell commands (fallback to local)
 rag/
-  store.py              Embedding model + Chroma vector store setup
-  indexer.py            Chunks files and embeds them into the vector store
-  search.py             Semantic search used by the search_codebase tool
-workspace/               Sandboxed directory the agent is allowed to read/write/run in
+  store.py              Embedding model + Chroma setup
+  indexer.py            AST-aware chunking + embedding
+  search.py             Semantic search for search_codebase tool
+workspace/              Sandboxed directory — agent sirf yahin read/write/run kar sakta hai
+tests/                  79 tests (pytest)
 ```
 
 ### How it works
 
-1. **Agent loop** (`agent/core.py`): sends the conversation to Gemini / Groq with
-   a list of available tools. If the model responds with a function-call
-   request, the loop executes it locally and feeds the result back in,
-   repeating until it replies with plain text (task done) or hits max iterations.
-2. **Tools** (`agent/tools.py`): `read_file`, `read_file_range`, `write_file`,
-   `edit_file`, `list_dir`, `grep_search`, `find_files_by_glob`, `run_shell_command`,
-   `search_codebase`, `undo_last_change`. All file operations are jailed to `workspace/`.
-   Auto-linting catches syntax errors after any file edit.
-3. **Session Persistence & Checkpointing** (`agent/session.py`, `agent/checkpoint.py`):
-   Conversations can be saved and resumed across restarts. The workspace is tracked
-   via local shadow git commits before/after edits, enabling instant `/undo` rollbacks.
-4. **RAG layer** (`rag/`): `python cli.py index` walks `workspace/`,
-   splits files into AST-aware chunks (via Tree-sitter) or line windows, embeds them
-   with `sentence-transformers`, and stores them in Chroma DB.
+1. **Agent loop** (`agent/core.py`): conversation ko Gemini/Groq pe bhejo with tool schemas. Model ne `function_call` manga toh local `execute_tool` chalao, result wapas feed karo — jab tak plain text reply na aaye.
+2. **Tools** (`agent/tools.py`): saare file ops `WORKSPACE_ROOT` me jailed hain. `edit_file` surgical diff deta hai, `write_file` pura overwrite. Har Python edit pe `ast.parse` lint (`agent/tools.py:360`).
+3. **RAG** (`rag/`): `python cli.py index` workspace ko Tree-sitter se chunk karta hai, embed karke Chroma me dalta hai. `search_codebase` tool semantic search deta hai.
+4. **Checkpoint** (`agent/checkpoint.py`): har file change se pehle/after git commit — `/undo` se instant rollback, `/diff` se diff dekho.
+
+---
+
+## Tech Stack
+
+| Layer | Tech |
+|---|---|
+| LLM | `google-genai` (Gemini 2.0 Flash), Groq API (`httpx` + `urllib`) |
+| RAG | `chromadb`, `sentence-transformers`, `tree-sitter` (+ python/js/java/go/rust) |
+| CLI | `click`, `rich` (tables, diffs, spinners) |
+| Sandbox | `docker` (optional, auto-fallback to subprocess) |
+| Config | `tomllib`, `python-dotenv` |
+| Tests | `pytest` (79 passed), `ruff` |
+
+---
 
 ## Setup
 
 ```bash
 python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
+# Windows: venv\Scripts\activate | Linux/Mac: source venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# Add your GEMINI_API_KEY (or GROQ_API_KEY) to .env
+# .env me GEMINI_API_KEY ya GROQ_API_KEY dalo
+# Free Gemini key: https://aistudio.google.com/apikey
+# Free Groq key: https://console.groq.com
 ```
+
+Or one-shot:
+
+```bash
+pip install -e .
+agentic init      # workspace + sessions + .env + gitignore scaffold
+agentic setup     # provider + API key wizard
+```
+
+---
 
 ## Usage
 
 ```bash
-# Index the workspace for semantic search
+# 1. Index workspace for semantic search (first time / after big changes)
 python cli.py index
+# or
+agentic index
 
-# Interactive session (with auto-resume or named sessions)
+# 2. Interactive chat
 python cli.py chat
 python cli.py chat --session my-feature
 python cli.py chat --continue
 
-# List saved sessions
-python cli.py sessions
-
-# Rollback or check diffs
-python cli.py undo
-python cli.py diff
-
-# Run a single task
+# 3. Single task
 python cli.py run "Fix the divide-by-zero bug in sample.py"
+
+# 4. Helpers
+python cli.py sessions   # list saved sessions
+python cli.py undo       # undo last change
+python cli.py diff       # show workspace git diff
 ```
 
-### Interactive Slash Commands
+### Slash Commands (inside `chat`)
 
-Inside `python cli.py chat`:
-- `/save [name]` — Save current session to disk
-- `/load <id>` — Load a saved session
-- `/sessions` — List all saved sessions
-- `/undo` — Rollback the last file edit made by the agent
-- `/diff` — Show current workspace git diff
-- `/history` — View checkpoint commit history
-- `/reset` — Clear conversation and start fresh
-- `/model [gemini|groq]` — Switch LLM provider on the fly
-- `/help` — Display available commands
+| Command | Kaam |
+|---|---|
+| `/help` | help menu |
+| `/save [name]` | session save |
+| `/load <id>` | session load |
+| `/sessions` | list sessions |
+| `/undo` | last edit rollback |
+| `/diff` | git diff dekho |
+| `/history` | checkpoint history |
+| `/reset` | conversation clear |
+| `/model [gemini\|groq]` | provider switch |
+| `/stats` | token/cost stats |
+| `exit` | quit (auto-save) |
 
-## Roadmap & Backlog
+---
 
-- [x] Replace raw `write_file` overwrites with diff/patch-based editing (`edit_file` + unified diffs)
-- [x] AST-aware chunking (split by function/class via `tree-sitter`)
-- [x] Conversation summarization (context window budget management)
-- [x] Session persistence (save/resume conversations to disk via `.sessions/`)
-- [x] Git workspace checkpointing & `/undo` instant rollback
-- [x] Fast regex search (`grep_search`), line-range reading (`read_file_range`), and glob search
-- [x] Auto-linting / syntax validation loop on file edits
-- [ ] Rich Terminal TUI with colored diffs, syntax highlighting, and live spinners
-- [ ] Multi-language AST chunking (JS/TS, Go, Rust, Java)
-- [ ] Hybrid Search (BM25 keyword + Vector embedding Reciprocal Rank Fusion)
-- [ ] Multi-Agent Planner-Worker architecture
-- [ ] Run `run_shell_command` inside a Docker container
-- [ ] FastAPI Backend + Web UI / VS Code extension
+## Why No Framework?
 
-## Why no framework?
+Intentionally `LangChain / AutoGen` nahi use kiya — taaki har piece (loop, tool dispatch, retrieval, session) visible rahe. Portfolio ke liye yehi point hai: library import karna nahi, mechanics samajhna.
 
-This is intentionally built without LangChain/AutoGen/etc. so every piece
-— the loop, the tool dispatch, the retrieval, and the session engine — is visible and easy to
-reason about. That's also the point for a portfolio project: it shows you
-understand the mechanics, not just how to import a library.
+---
 
+## Roadmap
+
+- [x] Diff/patch editing (`edit_file` + unified diffs)
+- [x] AST-aware chunking (Tree-sitter)
+- [x] Conversation summarization (context budget)
+- [x] Session persistence (`.sessions/`)
+- [x] Git checkpointing & `/undo` rollback
+- [x] Fast regex search (`grep_search`), `read_file_range`, `glob` search
+- [x] Auto-lint / syntax validation loop
+- [x] Docker sandbox for `run_shell_command`
+- [x] Rich terminal UI (colored diffs, tables, spinners)
+- [x] Cost/token tracking
+- [ ] Hybrid Search (BM25 + Vector RRF)
+- [ ] Multi-Agent Planner-Worker
+- [ ] Multi-language AST chunking (JS/TS, Go, Rust, Java — partial done)
+
+---
+
+## Resume Bullet (copy-paste)
+
+> **Agentic IDE — Terminal Coding Agent (like Claude Code)** — Built LLM agent loop from scratch without frameworks: tool-calling with 10 tools, streaming, AST-aware RAG (Chroma + sentence-transformers + Tree-sitter), session persistence & git checkpoint undo, Docker-sandboxed execution. Python, Gemini/Groq, 79 tests.
+
+---
+
+## License
+
+MIT

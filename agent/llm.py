@@ -318,7 +318,7 @@ class LLMClient:
             }
             for t in tools
         ]
-        return self.client.models.generate_content(
+        return self.client.models.generate_content_stream(
             model=GEMINI_MODEL,
             contents=contents,
             config=types.GenerateContentConfig(
@@ -328,7 +328,6 @@ class LLMClient:
                     disable=True
                 ),
             ),
-            stream=True,
         )
 
     def _stream_gemini(self, contents, system, tools):

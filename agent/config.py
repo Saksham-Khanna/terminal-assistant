@@ -72,7 +72,7 @@ DEFAULTS: dict[str, Any] = {
         "allow_origins": [],
     },
     "gemini": {
-        "model": "gemini-2.0-flash",
+        "model": "gemini-3.6-flash",
     },
     "groq": {
         "model": "openai/gpt-oss-120b",
@@ -177,7 +177,7 @@ class Config:
         """Gemini model name."""
         return os.environ.get(
             "GEMINI_MODEL",
-            self.section("gemini").get("model", "gemini-2.0-flash"),
+            self.section("gemini").get("model", "gemini-3.6-flash"),
         )
 
     @property
