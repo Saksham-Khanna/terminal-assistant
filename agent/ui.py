@@ -8,7 +8,16 @@ Provides consistent, nicely formatted output across all CLI commands:
 - Progress indicators
 """
 
+import sys
 from typing import Any, Optional
+
+# Windows console Unicode support
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 
 try:
     from rich.console import Console
@@ -24,7 +33,7 @@ except ImportError:
     _HAS_RICH = False
 
 # Single shared console (Rich handles terminal detection, colors, etc.)
-console = Console()
+console = Console(legacy_windows=False if sys.platform == "win32" else None)
 
 
 def has_rich() -> bool:
@@ -222,6 +231,5 @@ def tool_call_line(name: str, args: Any) -> None:
     """Display which tool is being invoked."""
     import json
     args_preview = json.dumps(args, ensure_ascii=False)
-    if len(args_preview) > 80:
-        args_preview = args_preview[:80] + "..."
-    console.print(f"[bold magenta]→[/bold magenta] [cyan]{name}[/cyan]({args_preview})")
+    arrow = "→" if sys.stdout and getattr(sys.stdout, "encoding", "").lower().startswith("utf") else "->"
+    console.print(f"[bold magenta]{arrow}[/bold magenta] [cyan]{name}[/cyan]({args_preview})")

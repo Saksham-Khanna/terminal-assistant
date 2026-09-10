@@ -137,8 +137,10 @@ class Config:
     @property
     def provider(self) -> str:
         """Resolve provider from config or env var."""
-        return (os.environ.get("MODEL_PROVIDER") or
-                self._config.get("provider") or "gemini").lower()
+        val = os.environ.get("MODEL_PROVIDER") or self._config.get("provider") or "gemini"
+        if isinstance(val, dict):
+            val = val.get("model") or val.get("name") or "gemini"
+        return str(val).lower()
 
     @property
     def workspace_root(self) -> str:
@@ -262,7 +264,7 @@ def create_default_config() -> str:
 model = "gemini"
 
 [gemini]
-model = "gemini-2.0-flash"
+model = "gemini-3.6-flash"
 
 [groq]
 model = "openai/gpt-oss-120b"

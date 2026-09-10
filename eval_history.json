@@ -1,0 +1,20 @@
+[
+  {
+    "timestamp": "2026-09-10T21:59:31.873290",
+    "query": "hello",
+    "response_preview": "Hello! How can I help you today? Let me know if you need assistance with your codebase or any coding tasks.",
+    "scores": {
+      "faithfulness": 1.0,
+      "relevance": 1.0,
+      "completeness": 1.0,
+      "groundedness": 1.0,
+      "overall": 1.0
+    },
+    "quality_level": "Excellent",
+    "feedback": "The response is a friendly and accurate acknowledgment of the user's greeting. Since no RAG context was required or provided for a conversational query, all metrics score perfectly.",
+    "tools_used": [
+      "list_dir",
+      "read_file"
+    ]
+  }
+]

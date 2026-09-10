@@ -183,9 +183,6 @@ class LLMClient:
                 config=types.GenerateContentConfig(
                     system_instruction=system,
                     tools=[types.Tool(function_declarations=function_declarations)],
-                    automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                        disable=True
-                    ),
                 ),
             )
 
@@ -324,9 +321,6 @@ class LLMClient:
             config=types.GenerateContentConfig(
                 system_instruction=system,
                 tools=[types.Tool(function_declarations=function_declarations)],
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                    disable=True
-                ),
             ),
         )
 
