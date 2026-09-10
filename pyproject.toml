@@ -39,8 +39,6 @@ dependencies = [
     "httpx>=0.25.0",
     "click>=8.0",
     "rich>=13.0",
-    "fastapi>=0.110",
-    "uvicorn[standard]>=0.27",
 ]
 
 [project.optional-dependencies]
@@ -62,10 +60,7 @@ agentic = "agentic_ide.cli:entry"
 Repository = "https://github.com/yourusername/agentic-ide"
 
 [tool.setuptools.packages.find]
-include = ["agent*", "rag*", "agentic_ide*", "webapp*"]
-
-[tool.setuptools.package-data]
-webapp = ["static/*.html", "static/*.css", "static/*.js"]
+include = ["agent*", "rag*", "agentic_ide*"]
 
 [tool.ruff]
 line-length = 100

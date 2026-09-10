@@ -1,1 +1,0 @@
-"""Web UI (FastAPI) package for Agentic IDE."""

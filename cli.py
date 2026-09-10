@@ -425,34 +425,7 @@ def eval(clear):
         _cmd_eval_stats()
 
 
-@cli.command()
-@click.option("--host", default="127.0.0.1", help="Host to bind (default 127.0.0.1)")
-@click.option("--port", "-p", default=8000, type=int, help="Port to run on (default 8000)")
-@click.option("--reload", is_flag=True, help="Auto-reload server on code changes (dev only)")
-def web(host, port, reload):
-    """Launch the web UI (FastAPI backend)."""
-    try:
-        from webapp.server import run_server
-    except ImportError as e:
-        print_error(f"Web UI dependencies missing: {e}")
-        click.echo("  Run: pip install -r requirements.txt")
-        return
 
-    print_header(f"Agentic IDE Web UI")
-    print_info(f"  URL:   http://{host}:{port}")
-    print_info(f"  Ctrl+C to stop")
-
-    public_host = host in ("0.0.0.0", "::", "")
-    if public_host and not get_config().web_require_auth:
-        print_warning(
-            f"  WARNING: binding to '{host}' exposes the web UI (and its file/shell access) "
-            "to your whole network. "
-            "Set AGENTIC_WEB_AUTH=true + AGENTIC_WEB_TOKEN=<key> in .env to protect it."
-        )
-    elif not public_host and get_config().web_require_auth:
-        print_info(f"  Auth:   API token required (every /api/* call and the chat socket)")
-    click.echo()
-    run_server(host=host, port=port, reload=reload)
 
 
 def _print_chat_help():

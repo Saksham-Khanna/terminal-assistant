@@ -20,7 +20,7 @@ def runner():
 def test_cli_group_has_expected_commands(runner):
     result = runner.invoke(cli, ["--help"])
     assert result.exit_code == 0
-    for cmd in ("init", "chat", "setup", "index", "sessions", "undo", "diff", "run", "eval", "web"):
+    for cmd in ("init", "chat", "setup", "index", "sessions", "undo", "diff", "run", "eval"):
         assert cmd in result.output
 
 
