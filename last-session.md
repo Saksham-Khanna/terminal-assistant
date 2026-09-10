@@ -44,6 +44,28 @@
 - `.env.example` — removed web UI auth, added sandbox example
 - `last-session.md` — this file
 
+## Continuation — Same Night
+
+**User Q7:** .env galti se push kar di? Check karke remove karde
+**Check:** `git status`, `git ls-files --cached`, `git log --all -- ".env"` `git cat-file -p origin/main:.env`
+**Result:** Safe hai — `.env` kabhi commit nahi hui, `git ls-files` me nahi hai (untracked), `origin/main:.env` → fatal not in origin/main, `.gitignore:1` me `.env` ignored hai. Local `.env:1` me `GEMINI_API_KEY=AQ.Ab8R...` 68 bytes still on disk only. Advice: key rotate kar de https://aistudio.google.com/apikey se.
+
+**User Q8:** [Image] Source Control me 2 branch kyu dikh rahi?
+**Ans:** 2 repo hai — `agentic-ide/.git` (main) + `workspace/.git` jo `agent/checkpoint.py:56` `_ensure_git_repo()` ne banaya hai undo/diff ke liye `agent/checkpoint.py:100`. Normal hai. Hide karna ho to `settings.json: "git.ignoredRepositories": ["workspace"]`.
+
+**User Q9:** `python cli.py chat` me 2 tests:
+- 1st `hello` → `[Error] Models.generate_content() got unexpected keyword 'stream'` 
+- 2nd `hi` → works, `what is this project about` → `list_dir(".")` + `read_file("sample.py")` + `git status` but no answer, `usage: 88 tok | 5 calls | 3 tools`
+**Diagnosis:**
+- Stream error: `google-genai 1.0.0` me `generate_content(stream=True)` nahi hai, sahi `generate_content_stream` hai `agent/llm.py:318` — ab fix hai, pehle fail hua tha.
+- Faltu tools: `WORKSPACE_ROOT=./workspace` `agent/tools.py:25` + `_resolve() :30` `../README.md` ko block karta hai, isliye project info nahi padh paya. `SYSTEM_PROMPT` `agent/core.py:43` informational question ke liye guide nahi karta, model random `sample.py` padh leta hai.
+**Proposed Fix:** `agent/core.py:43` me prompt add karo — informational Q pe `search_codebase` first, random file na padhe; ya `WORKSPACE_ROOT` ko `"."` karo `agentic.toml` me, ya allowlisted README read tool add karo. `pip show google-genai` 1.0.0 confirm, `pip install -U google-genai` if needed. `--debug` se retest.
+
+**User Q10:** isko bhi last_session me save karde kal continue karunga
+**Action:** This file updated — kal yahin se continue.
+
 ## Pending (User Choice)
-- GIF banana (user asked what gif)
-- Agar pura webapp code delete karna hai to `webapp/` folder + `cli.py:433` web command + `pyproject.toml:65` webapp + `tests/test_webapp.py` delete karna padega — abhi nahi kiya, user confirm kare to kar denge
+- GIF banana (terminal bug-fix 20sec `read_file -> edit_file -> pytest`)
+- Fix `agent/core.py:43` prompt + `WORKSPACE_ROOT` jail for README questions (proposed, not yet applied — user to confirm)
+- Optional: pura `webapp/` code delete (abhi hidden hi rakha, `cli.py:433` web cmd still exists)
+- Rotate GEMINI_API_KEY (advice given, not yet done)
