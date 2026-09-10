@@ -16,5 +16,20 @@
       "list_dir",
       "read_file"
     ]
+  },
+  {
+    "timestamp": "2026-09-10T22:05:20.810116",
+    "query": "hi",
+    "response_preview": "Hello! How can I help you with your project today?",
+    "scores": {
+      "faithfulness": 1.0,
+      "relevance": 1.0,
+      "completeness": 1.0,
+      "groundedness": 1.0,
+      "overall": 1.0
+    },
+    "quality_level": "Excellent",
+    "feedback": "The response is an appropriate and polite conversational reply to a simple user greeting, making no unsupported factual claims.",
+    "tools_used": []
   }
 ]
