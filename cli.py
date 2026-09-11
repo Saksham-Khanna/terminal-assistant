@@ -433,6 +433,20 @@ def eval(clear):
         _cmd_eval_stats()
 
 
+@cli.command()
+@click.option("--port", default=8000, show_default=True, help="Port to listen on")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host to bind")
+def web(port, host):
+    """Start Helix web backend for VS Code / Antigravity extension."""
+    try:
+        from webapp.server import run_server
+    except ImportError as e:
+        print_error(f"Web dependencies missing: {e}. Run pip install -r requirements.txt")
+        sys.exit(1)
+    print_info(f"Starting Helix web server at http://{host}:{port}")
+    run_server(host=host, port=port)
+
+
 
 
 

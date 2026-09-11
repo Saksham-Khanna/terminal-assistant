@@ -3,16 +3,16 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "agentic-ide"
+name = "helix"
 version = "0.1.0"
-description = "Terminal-based AI coding agent with tool grounding and RAG"
+description = "Helix — Terminal coding agent with tool grounding and RAG (like Claude Code)"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
 authors = [
     {name = "Your Name", email = "you@example.com"}
 ]
-keywords = ["ai", "coding-agent", "rag", "llm", "gemini", "groq"]
+keywords = ["ai", "coding-agent", "rag", "llm", "gemini", "groq", "helix"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
@@ -39,6 +39,8 @@ dependencies = [
     "httpx>=0.25.0",
     "click>=8.0",
     "rich>=13.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.30.0",
 ]
 
 [project.optional-dependencies]
@@ -55,12 +57,13 @@ all = [
 
 [project.scripts]
 agentic = "agentic_ide.cli:entry"
+helix = "agentic_ide.cli:entry"
 
 [project.urls]
-Repository = "https://github.com/yourusername/agentic-ide"
+Repository = "https://github.com/yourusername/helix"
 
 [tool.setuptools.packages.find]
-include = ["agent*", "rag*", "agentic_ide*"]
+include = ["agent*", "rag*", "agentic_ide*", "webapp*"]
 
 [tool.ruff]
 line-length = 100

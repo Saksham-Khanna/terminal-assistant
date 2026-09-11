@@ -1,4 +1,4 @@
-# Agentic IDE — Terminal Coding Agent
+# Helix — Terminal Coding Agent
 
 ![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
 ![License: MIT](https://img.shields.io/badge/License-MIT-green)
@@ -214,7 +214,7 @@ Intentionally `LangChain / AutoGen` nahi use kiya — taaki har piece (loop, too
 
 ## Resume Bullet (copy-paste)
 
-> **Agentic IDE — Terminal Coding Agent (like Claude Code)** — Built LLM agent loop from scratch without frameworks: tool-calling with 10 tools, streaming, AST-aware RAG (Chroma + sentence-transformers + Tree-sitter), session persistence & git checkpoint undo, Docker-sandboxed execution, guardrails + LLM-as-judge evals (faithfulness/relevance/completeness/groundedness). Python, Gemini/Groq, 58 tests.
+> **Helix — Terminal Coding Agent (like Claude Code)** — Built LLM agent loop from scratch without frameworks: tool-calling with 10 tools, streaming, AST-aware RAG (Chroma + sentence-transformers + Tree-sitter), session persistence & git checkpoint undo, Docker-sandboxed execution, guardrails + LLM-as-judge evals (faithfulness/relevance/completeness/groundedness). Python, Gemini/Groq, 58 tests.
 
 ---
 

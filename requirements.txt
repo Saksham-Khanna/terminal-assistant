@@ -12,6 +12,8 @@ tree-sitter-rust>=0.24.0
 httpx>=0.25.0
 click>=8.0
 rich>=13.0
+fastapi>=0.110.0
+uvicorn>=0.30.0
 
 # Optional: Rich terminal UI
 # rich>=13.0

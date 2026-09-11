@@ -1,7 +1,7 @@
 {
-  "name": "agentic-ide",
-  "displayName": "Agentic IDE",
-  "description": "AI coding assistant with chat, file editing, diff view — powered by your own agent backend",
+  "name": "helix",
+  "displayName": "Helix",
+  "description": "Helix — AI coding assistant with chat, file editing, diff view — powered by your own agent backend",
   "version": "0.1.0",
   "publisher": "agentic-ide",
   "engines": {
