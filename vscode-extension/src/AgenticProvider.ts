@@ -94,7 +94,7 @@ export class AgenticProvider implements vscode.WebviewViewProvider {
           // We need the workspace root — fetch from /api/health or use workspace folder
           const folders = vscode.workspace.workspaceFolders;
           if (folders) {
-            const fileUri = vscode.Uri.joinPath(folders[0].uri, "workspace", message.path);
+            const fileUri = vscode.Uri.joinPath(folders[0].uri, message.path);
             await vscode.window.showTextDocument(fileUri);
           }
         } catch (e: any) {

@@ -32,9 +32,17 @@ HINTS = [
     (lambda e: "index out of range" in str(e) or "list index" in str(e),
      "Unexpected empty response from the model. The task may be too short "
      "or the API returned nothing. Try again."),
-    (lambda e: "CUDNN" in str(e).upper() or "cuda" in str(e).lower(),
-     "GPU/CUDA issue with sentence-transformers. Try reinstalling torch "
-     "or run with CPU only."),
+     (lambda e: "CUDNN" in str(e).upper() or "cuda" in str(e).lower(),
+      "GPU/CUDA issue with sentence-transformers. Try reinstalling torch "
+      "or run with CPU only."),
+     (lambda e: "RESOURCE_EXHAUSTED" in str(e) or "quota" in str(e).lower() or "429" in str(e),
+      "Gemini quota exhausted (free tier 20 req/day for gemini-3.6-flash). "
+      "Fix: switch model to 'gemini-3.5-flash' in agentic.toml/.env (GEMINI_MODEL=gemini-3.5-flash), "
+      "or set MODEL_PROVIDER=groq with GROQ_API_KEY, or wait ~24h for quota reset. "
+      "See https://ai.dev/rate-limit"),
+     (lambda e: "503" in str(e) or "UNAVAILABLE" in str(e),
+      "Model temporarily unavailable (high demand). Retry in few seconds or switch to "
+      "GEMINI_MODEL=gemini-3.5-flash-lite / gemini-flash-lite-latest"),
 ]
 
 

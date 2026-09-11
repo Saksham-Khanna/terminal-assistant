@@ -361,11 +361,19 @@ def chat(session, continue_latest):
 
         # Regular agent task execution
         console.print("[bold cyan]agent> [/bold cyan]", end="")
-        for chunk in agent.run_stream(task):
-            if isinstance(chunk, str):
-                console.print(chunk, end="")
+        try:
+            for chunk in agent.run_stream(task):
+                if isinstance(chunk, str):
+                    console.print(chunk, end="")
+                else:
+                    print_eval_scores(chunk)
+        except Exception as e:
+            from agent.errors import friendly_error
+            if _DEBUG:
+                from agent.errors import format_traceback
+                console.print(f"[red]{format_traceback(e)}[/red]")
             else:
-                print_eval_scores(chunk)
+                console.print(f"[red][Error] {friendly_error(e)}[/red]")
         console.print("\n")
         print_info(f"usage: {agent.usage.total_tokens:,} tok | "
                    f"${agent.usage.cost_usd:.4f} | "

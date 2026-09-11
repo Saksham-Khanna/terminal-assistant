@@ -42,7 +42,7 @@ def _resolve(path: str) -> str:
 TOOL_SCHEMAS = [
     {
         "name": "read_file",
-        "description": "Read the full contents of a text file inside the workspace.",
+        "description": "Read the full contents of a text file inside the project/workspace root.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -54,9 +54,10 @@ TOOL_SCHEMAS = [
     {
         "name": "write_file",
         "description": (
-            "Write (create or overwrite) a text file inside the workspace. "
+            "Write (create or overwrite) a text file inside the project root. "
             "Every overwrite outputs a diff so changes are reviewable. "
-            "For small surgical changes to an existing file, use edit_file instead."
+            "For small surgical changes to an existing file, use edit_file instead. "
+            "Blocked when AGENT_READ_ONLY=true."
         ),
         "input_schema": {
             "type": "object",
@@ -74,7 +75,8 @@ TOOL_SCHEMAS = [
             "an exact block of text (old_string) with new text (new_string). "
             "Outputs a unified diff. old_string must be unique in the file unless "
             "replace_all is set to true. Prefer this over write_file for small "
-            "targeted changes — it's safer and produces reviewable diffs."
+            "targeted changes — it's safer and produces reviewable diffs. "
+            "Blocked when AGENT_READ_ONLY=true."
         ),
         "input_schema": {
             "type": "object",
@@ -98,7 +100,7 @@ TOOL_SCHEMAS = [
     },
     {
         "name": "list_dir",
-        "description": "List files and folders inside a directory in the workspace.",
+        "description": "List files and folders inside a directory in the project root.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -113,9 +115,10 @@ TOOL_SCHEMAS = [
     {
         "name": "run_shell_command",
         "description": (
-            "Run a shell command inside the workspace directory. "
+            "Run a shell command inside the project root. "
             "Use for running tests, installing packages, etc. "
-            "Destructive or unclear commands will ask the user for confirmation."
+            "Destructive or unclear commands will ask for confirmation. "
+            "Blocked when AGENT_READ_ONLY=true (except safe read-only commands like ls/cat/git status)."
         ),
         "input_schema": {
             "type": "object",
@@ -373,8 +376,30 @@ def _check_python_syntax(filepath: str) -> str | None:
         return f"Error checking syntax: {e}"
 
 
+def _is_write_blocked() -> str | None:
+    """Return block message if project root is read-only."""
+    if get_config().is_read_only:
+        return (
+            "Error: Write blocked - project root is read-only (AGENT_READ_ONLY=true). "
+            "This mode only allows read/search/list. Set AGENT_READ_ONLY=false in .env to enable writes."
+        )
+    return None
+
+
 def execute_tool(name: str, tool_input: dict) -> str:
     """Dispatch a tool call to its implementation. Always returns a string."""
+    # Block writes when read-only
+    if name in ("write_file", "edit_file", "run_shell_command", "undo_last_change"):
+        blocked = _is_write_blocked()
+        if blocked:
+            # run_shell_command: allow safe read-only commands even in read-only mode
+            if name == "run_shell_command":
+                cmd = tool_input.get("command", "").strip()
+                is_read_only_cmd = cmd.startswith(("ls", "dir", "cat", "type", "git status", "git diff", "git log", "pytest", "pip list", "pip show", "echo", "python sample.py", "python -m"))
+                if not is_read_only_cmd:
+                    return blocked
+            else:
+                return blocked
     try:
         if name == "read_file":
             return _read_file(tool_input["path"])

@@ -23,10 +23,18 @@ from google.genai import types
 from agent.config import get_config
 from agent.ratelimit import with_retries, with_retries_stream
 
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+
+def _get_gemini_model() -> str:
+    return get_config().gemini_model
+
+def _get_groq_model() -> str:
+    return get_config().groq_model
+
+# Keep for backward compat – now dynamic
 _config = get_config()
 GEMINI_MODEL = _config.gemini_model
 GROQ_MODEL = _config.groq_model
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36"
 
 
@@ -39,7 +47,7 @@ def _groq_request(messages: list, tools: list[dict], system: str, stream: bool =
         )
 
     payload = {
-        "model": GROQ_MODEL,
+        "model": _get_groq_model(),
         "messages": messages,
         "stream": stream,
     }
@@ -88,7 +96,7 @@ def _groq_stream(messages: list, tools: list[dict], system: str) -> Generator[di
         raise RuntimeError("GROQ_API_KEY not set")
 
     payload = {
-        "model": GROQ_MODEL,
+        "model": _get_groq_model(),
         "messages": messages,
         "stream": True,
     }
@@ -178,7 +186,7 @@ class LLMClient:
 
         def _do_call():
             return self.client.models.generate_content(
-                model=GEMINI_MODEL,
+                model=_get_gemini_model(),
                 contents=contents,
                 config=types.GenerateContentConfig(
                     system_instruction=system,
@@ -316,7 +324,7 @@ class LLMClient:
             for t in tools
         ]
         return self.client.models.generate_content_stream(
-            model=GEMINI_MODEL,
+            model=_get_gemini_model(),
             contents=contents,
             config=types.GenerateContentConfig(
                 system_instruction=system,

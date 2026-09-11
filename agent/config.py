@@ -43,7 +43,7 @@ PROJECT_CONFIG = "agentic.toml"
 DEFAULTS: dict[str, Any] = {
     "provider": "gemini",
     "workspace": {
-        "root": "./workspace",
+        "root": ".",
     },
     "session": {
         "dir": "./.sessions",
@@ -53,10 +53,10 @@ DEFAULTS: dict[str, Any] = {
         "summarize_tail_turns": 6,
     },
     "llm": {
-        "rpm": 15,
-        "min_interval": 0.5,
+        "rpm": 5,
+        "min_interval": 2.0,
         "max_retries": 3,
-        "backoff_base": 1.0,
+        "backoff_base": 2.0,
     },
     "sandbox": {
         "enabled": True,
@@ -67,7 +67,7 @@ DEFAULTS: dict[str, Any] = {
         "timeout": 60,
     },
     "gemini": {
-        "model": "gemini-3.6-flash",
+        "model": "gemini-3.5-flash",
     },
     "groq": {
         "model": "openai/gpt-oss-120b",
@@ -142,8 +142,18 @@ class Config:
         """Workspace root directory."""
         return os.environ.get(
             "AGENT_WORKSPACE",
-            self.section("workspace").get("root", "./workspace"),
+            self.section("workspace").get("root", "."),
         )
+
+    @property
+    def is_read_only(self) -> bool:
+        """True if project root is read-only (no writes)."""
+        val = os.environ.get("AGENT_READ_ONLY", "")
+        if val != "":
+            return val.lower() == "true"
+        # Default: read-only when workspace is project root
+        root = self.workspace_root
+        return os.path.abspath(root) == os.path.abspath(".") or os.path.abspath(root) == os.path.abspath(os.getcwd())
 
     @property
     def session_dir(self) -> str:
@@ -237,13 +247,15 @@ def create_default_config() -> str:
 model = "gemini"
 
 [gemini]
-model = "gemini-3.6-flash"
+model = "gemini-3.5-flash"
 
 [groq]
 model = "openai/gpt-oss-120b"
 
-[workspace]
-root = "./workspace"
+    [workspace]
+# "." = project root (read-only by default, set AGENT_READ_ONLY=false to allow writes)
+# "./workspace" = sandboxed demo
+root = "."
 
 [context]
 budget_tokens = 50000

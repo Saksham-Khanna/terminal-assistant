@@ -140,20 +140,59 @@ class ResponseEvaluator:
         )
 
         try:
-            # Make evaluation LLM call
-            from google.genai import types
+            # Check env again dynamically - user may have disabled mid-session
+            if os.environ.get("ENABLE_EVALUATION", "true").lower() == "false":
+                return None
+
+            # Make evaluation LLM call - support both Gemini and Groq
             from agent.ratelimit import with_retries
 
-            def _do_eval():
-                return self.llm.client.models.generate_content(
-                    model=EVAL_MODEL,
-                    contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
-                    config=types.GenerateContentConfig(
-                        temperature=0.1,  # Low temperature for consistent scoring
-                    ),
-                )
-
-            eval_response = with_retries(_do_eval)
+            # Groq provider has no self.llm.client, fallback to Gemini-style eval via Groq API
+            if getattr(self.llm, "provider", "gemini") == "groq" or not hasattr(self.llm, "client"):
+                # Use Groq for eval
+                from agent.llm import _get_groq_model
+                import json as _json
+                import urllib.request
+                from agent.config import get_config
+                def _do_eval_groq():
+                    import os as _os
+                    import urllib.request as _req
+                    import json as _js
+                    payload = {
+                        "model": _get_groq_model(),
+                        "messages": [{"role": "user", "content": prompt}],
+                        "temperature": 0.1,
+                    }
+                    req = _req.Request(
+                        "https://api.groq.com/openai/v1/chat/completions",
+                        data=_js.dumps(payload).encode(),
+                        headers={"Content-Type": "application/json", "Authorization": f"Bearer {_os.environ.get('GROQ_API_KEY')}", "User-Agent": "Mozilla/5.0"},
+                        method="POST",
+                    )
+                    with _req.urlopen(req) as resp:
+                        data = _js.loads(resp.read().decode())
+                        # Wrap to mimic Gemini response
+                        class _FakePart:
+                            text = data["choices"][0]["message"]["content"]
+                        class _FakeContent:
+                            parts = [_FakePart()]
+                        class _FakeCandidate:
+                            content = _FakeContent()
+                        class _FakeResp:
+                            candidates = [_FakeCandidate()]
+                        return _FakeResp()
+                eval_response = with_retries(_do_eval_groq)
+            else:
+                from google.genai import types
+                def _do_eval():
+                    return self.llm.client.models.generate_content(
+                        model=EVAL_MODEL,
+                        contents=[types.Content(role="user", parts=[types.Part.from_text(text=prompt)])],
+                        config=types.GenerateContentConfig(
+                            temperature=0.1,
+                        ),
+                    )
+                eval_response = with_retries(_do_eval)
 
             # Parse response
             response_text = eval_response.candidates[0].content.parts[0].text
@@ -178,7 +217,12 @@ class ResponseEvaluator:
             )
 
         except Exception as e:
-            print(f"  [Eval Error: {e}]")
+            # Quota errors are expected on free tier - don't spam user
+            msg = str(e)
+            if "RESOURCE_EXHAUSTED" in msg or "429" in msg or "quota" in msg.lower():
+                print(f"  [Eval skipped: quota/RPM limit - main answer is fine]")
+            else:
+                print(f"  [Eval Error: {e}]")
             return None
 
 

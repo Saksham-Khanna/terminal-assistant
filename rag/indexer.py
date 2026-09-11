@@ -17,7 +17,7 @@ CHUNK_LINES = 60
 CHUNK_OVERLAP = 10
 
 CODE_EXTENSIONS = {".py", ".js", ".ts", ".jsx", ".tsx", ".java", ".go", ".rs", ".md", ".txt"}
-SKIP_DIRS = {".git", "node_modules", "__pycache__", "venv", ".venv", "rag_db"}
+SKIP_DIRS = {".git", "node_modules", "__pycache__", "venv", ".venv", "rag_db", ".sessions", ".ruff_cache", ".pytest_cache", "dist", ".vscode", "chroma", "__pycache__"}
 
 
 def _chunk_file_window(source: str) -> list[str]:

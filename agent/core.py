@@ -62,7 +62,7 @@ MAX_ITERATIONS = 25
 
 
 class Agent:
-    def __init__(self, session_id: Optional[str] = None, enable_evaluation: bool = True):
+    def __init__(self, session_id: Optional[str] = None, enable_evaluation: bool | None = None):
         self.llm = LLMClient()
         self.provider = get_config().provider
         self.contents: list[types.Content] = []
@@ -78,7 +78,10 @@ class Agent:
         if session_id:
             self.load_session(session_id)
 
-        # Evaluation tracking
+        # Evaluation tracking - respect ENABLE_EVALUATION env
+        import os
+        if enable_evaluation is None:
+            enable_evaluation = os.environ.get("ENABLE_EVALUATION", "true").lower() == "true"
         self.enable_evaluation = enable_evaluation
         self.evaluator = ResponseEvaluator() if enable_evaluation else None
         self.context_chunks_used: list[str] = []
@@ -251,20 +254,56 @@ class Agent:
             if self.provider == "groq":
                 self.llm.set_groq_messages(self.groq_messages)
 
-            # Use streaming
+            # Use streaming (Groq falls back to non-stream on error)
             accumulated_text = ""
             tool_calls = []
 
-            for chunk in self.llm.stream(
-                contents=self.contents,
-                system=self.system,
-                tools=TOOL_SCHEMAS,
-            ):
-                if chunk["type"] == "text":
-                    accumulated_text += chunk["data"]
-                    yield chunk["data"]
-                elif chunk["type"] == "tool_call":
-                    tool_calls.append(chunk["data"])
+            try:
+                for chunk in self.llm.stream(
+                    contents=self.contents,
+                    system=self.system,
+                    tools=TOOL_SCHEMAS,
+                ):
+                    if chunk["type"] == "text":
+                        accumulated_text += chunk["data"]
+                        yield chunk["data"]
+                    elif chunk["type"] == "tool_call":
+                        tool_calls.append(chunk["data"])
+            except Exception as e:
+                if self.provider == "groq":
+                    # Fallback to non-streaming Groq call
+                    try:
+                        response = self.llm.call(contents=self.contents, system=self.system, tools=TOOL_SCHEMAS)
+                        result = self._run_groq_iteration(response)
+                        if result is not None:
+                            accumulated_text = result
+                            if accumulated_text:
+                                yield accumulated_text
+                            tool_calls = []
+                        else:
+                            # Tool calls already handled, continue loop
+                            continue
+                        # Handle final eval/save for fallback path
+                        if not tool_calls and accumulated_text:
+                            if self.session_id:
+                                self.save_session(self.session_id)
+                            if self.evaluator and accumulated_text:
+                                try:
+                                    eval_result = self.evaluator.evaluate(query=user_task, response=accumulated_text, context_chunks=self.context_chunks_used, tools_called=self.tools_called)
+                                    if eval_result:
+                                        from agent.eval_history import record_evaluation
+                                        record_evaluation(eval_result)
+                                        yield eval_result
+                                except Exception:
+                                    pass
+                            return
+                        elif not tool_calls and not accumulated_text:
+                            continue
+                    except Exception as e2:
+                        yield f"\n[Groq Error: {e2} (stream fallback failed: {e})]"
+                        return
+                else:
+                    raise
 
             # Record usage (streaming - rough char-based estimate)
             from agent.cost import estimate_tokens_char_fallback
@@ -290,6 +329,8 @@ class Agent:
 
             # If no tool calls, we're done
             if not tool_calls:
+                if not accumulated_text:
+                    yield "\n[Warning] Model returned empty response (no text, no tool calls). Check quota/rate-limit."
                 if accumulated_text:
                     self._append_model(accumulated_text)
 
@@ -343,7 +384,15 @@ class Agent:
                     )
                 )
 
-            self.contents.append(types.Content(role="user", parts=response_parts))
+            if self.provider == "groq":
+                for tc, part in zip(tool_calls, response_parts):
+                    self.groq_messages.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", ""),
+                        "content": part.function_response.response.get("result", ""),
+                    })
+            else:
+                self.contents.append(types.Content(role="user", parts=response_parts))
 
         yield "\nStopped: hit the max iteration limit without finishing the task."
 

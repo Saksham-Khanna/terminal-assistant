@@ -55,7 +55,8 @@ def test_init_scaffolds_project(runner):
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ["init"])
         assert result.exit_code == 0
-        assert os.path.isdir("workspace")
+        # Default workspace is now "." (project root, read-only) - may or may not create "workspace" dir
+        # Just verify core scaffolding exists
         assert os.path.isdir(".sessions")
         assert os.path.exists("agentic.toml")
         assert os.path.exists(".env")
