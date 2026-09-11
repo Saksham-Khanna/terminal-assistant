@@ -62,10 +62,24 @@
 **Proposed Fix:** `agent/core.py:43` me prompt add karo — informational Q pe `search_codebase` first, random file na padhe; ya `WORKSPACE_ROOT` ko `"."` karo `agentic.toml` me, ya allowlisted README read tool add karo. `pip show google-genai` 1.0.0 confirm, `pip install -U google-genai` if needed. `--debug` se retest.
 
 **User Q10:** isko bhi last_session me save karde kal continue karunga
-**Action:** This file updated — kal yahin se continue.
+**Action:** `last-session.md:64` updated — chat issue + env + 2-branch diagnosis saved.
+
+**User Q11:** bhai webapp ka saman remove karde kya sab
+**Action (Done 10 Sept late night):**
+- `webapp/` folder delete + `tests/test_webapp.py` delete
+- `cli.py:428` `web` command hata diya
+- `pyproject.toml:28` se `fastapi/uvicorn` deps hataye, `pyproject.toml:64` se `webapp*` package + `package-data` hataya
+- `requirements.txt:15` se `fastapi/uvicorn` hataya
+- `agent/config.py:69` `web` DEFAULTS + `agent/config.py:203` `web_require_auth/web_token/web_allow_origins` + `[web]` toml template clean
+- `tests/test_cli.py:23` se `web` expectation hataya
+- Verify: `python -m pytest tests -q` → `58 passed` (pehle 79, 21 webapp tests removed)
+- `grep webapp` ab sirf `last-session.md` history + `vscode-extension/src/AgenticProvider.ts:60` me bacha hai (extension ka token fallback, chhoda hai)
+
+**User Q12:** aur vo issue chat wala save krdia na last session md file me
+**Action:** Haan, yahi file me `Q9` chat issue (`stream` error + faltu tools) already `last-session.md:56` me saved hai — ab `Q11` webapp removal bhi add kar diya. Kal yahin se continue.
 
 ## Pending (User Choice)
-- GIF banana (terminal bug-fix 20sec `read_file -> edit_file -> pytest`)
-- Fix `agent/core.py:43` prompt + `WORKSPACE_ROOT` jail for README questions (proposed, not yet applied — user to confirm)
-- Optional: pura `webapp/` code delete (abhi hidden hi rakha, `cli.py:433` web cmd still exists)
-- Rotate GEMINI_API_KEY (advice given, not yet done)
+- GIF banana (terminal bug-fix 20sec `read_file -> edit_file -> pytest` → `assets/demo.gif` + `README.md:16`)
+- Fix `agent/core.py:43` prompt + `WORKSPACE_ROOT` jail for README questions (proposed in Q9, not yet applied — confirm kare toh kar dunga)
+- Rotate GEMINI_API_KEY (advice given in Q7, not yet done)
+- `vscode-extension` me `AGENTIC_WEB_TOKEN` refs rakhne ya hatane — abhi rakhe hain, bol toh hata dunga
