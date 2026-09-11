@@ -17,7 +17,7 @@
 
 ```bash
 python cli.py chat
-# you> Fix the divide-by-zero bug in workspace/sample.py
+# you> Fix the divide-by-zero bug in sample.py
 # agent> [read_file] [edit_file] [run_shell_command: pytest] -> Done
 ```
 
@@ -30,7 +30,7 @@ python cli.py chat
 | **Agent Loop** | `LLM -> tool_use -> execute -> repeat` (`agent/core.py:189`), streaming support (`agent/core.py:239`), max 25 iterations |
 | **Tools (10)** | `read_file`, `write_file`, `edit_file` (diff-based), `list_dir`, `grep_search`, `find_files_by_glob`, `read_file_range`, `run_shell_command`, `search_codebase`, `undo_last_change` (`agent/tools.py:42`) |
 | **RAG Search** | AST-aware chunking (Tree-sitter) + `sentence-transformers` + Chroma vector store (`rag/indexer.py`, `rag/search.py`) |
-| **Safety** | Workspace jail (`agent/tools.py:25`), path-traversal block, Docker sandbox (`agent/sandbox.py:116`), auto-lint after edits (`agent/tools.py:360`) |
+| **Safety** | Project-root guard (`agent/tools.py:25` `AGENT_WORKSPACE` + `AGENT_READ_ONLY`), path-traversal block, Docker sandbox (`agent/sandbox.py:116`), auto-lint after edits (`agent/tools.py:360`) |
 | **Session & Undo** | Save/resume conversations (`agent/session.py`), git shadow commits + instant `/undo` / `/diff` (`agent/checkpoint.py:100`) |
 | **Config** | `agentic.toml` + `.env` layered config, `agentic setup` wizard (`cli.py:92`), multi-provider (Gemini/Groq) (`agent/llm.py:141`) |
 | **Cost Tracking** | Token + cost per call (`agent/cost.py`), `/stats` |
@@ -48,22 +48,22 @@ agent/
   diff.py               Diff/patch editing: edit_file tool + unified-diff previews
   summarizer.py         Context-window summarization
   session.py            Session persistence (.sessions/)
-  checkpoint.py         Git workspace checkpointing & /undo rollback
+  checkpoint.py         Git checkpointing & /undo rollback (project .git)
   sandbox.py            Docker sandbox for shell commands (fallback to local)
 rag/
   store.py              Embedding model + Chroma setup
   indexer.py            AST-aware chunking + embedding
   search.py             Semantic search for search_codebase tool
-workspace/              Sandboxed directory — agent sirf yahin read/write/run kar sakta hai
-tests/                  79 tests (pytest)
+workspace/              Legacy sandboxed demo dir (now AGENT_WORKSPACE=. by default)
+tests/                  58 tests (pytest)
 ```
 
 ### How it works
 
 1. **Agent loop** (`agent/core.py`): conversation ko Gemini/Groq pe bhejo with tool schemas. Model ne `function_call` manga toh local `execute_tool` chalao, result wapas feed karo — jab tak plain text reply na aaye.
-2. **Tools** (`agent/tools.py`): saare file ops `WORKSPACE_ROOT` me jailed hain. `edit_file` surgical diff deta hai, `write_file` pura overwrite. Har Python edit pe `ast.parse` lint (`agent/tools.py:360`).
-3. **RAG** (`rag/`): `python cli.py index` workspace ko Tree-sitter se chunk karta hai, embed karke Chroma me dalta hai. `search_codebase` tool semantic search deta hai.
-4. **Checkpoint** (`agent/checkpoint.py`): har file change se pehle/after git commit — `/undo` se instant rollback, `/diff` se diff dekho.
+2. **Tools** (`agent/tools.py`): saare file ops `WORKSPACE_ROOT` (`agent/config.py:46` `AGENT_WORKSPACE=.`) me jailed hain, `AGENT_READ_ONLY=true` pe write/edit/shell block. `edit_file` surgical diff deta hai, `write_file` pura overwrite. Har Python edit pe `ast.parse` lint (`agent/tools.py:360`).
+3. **RAG** (`rag/`): `python cli.py index` project root ko Tree-sitter se chunk karta hai, embed karke Chroma me dalta hai. `search_codebase` tool semantic search deta hai.
+4. **Checkpoint** (`agent/checkpoint.py`): har file change se pehle/after git commit (project `.git`) — `/undo` se instant rollback, `/diff` se diff dekho.
 
 ---
 
@@ -81,10 +81,10 @@ Har output ka fixed jail hai — agent kabhi bhi project root se bahar nahi likh
 
 | Output | Kahan | Code |
 |---|---|---|
-| Agent file edits | `workspace/` (sandboxed jail) | `agent/tools.py:25` `WORKSPACE_ROOT`, `_resolve()` `agent/tools.py:30` path traversal block |
+| Agent file edits | Project root `AGENT_WORKSPACE=.` (read-only by default, `AGENT_READ_ONLY=true`) — set `false` for writes | `agent/tools.py:25` `WORKSPACE_ROOT`, `_resolve()` `agent/tools.py:30` path traversal block |
 | Session JSON | `.sessions/<session_id>.json` | `agent/session.py:18` `SESSIONS_DIR`, `agent/config.py:58` |
 | RAG index | `rag_db/` (Chroma persistent) + `chroma` collections | `rag/store.py`, `rag/indexer.py` (`cli.py:253` `index_directory`) |
-| Git checkpoints | `workspace/.git/` (shadow repo) — har `write_file/edit_file` se pehle & after auto-commit `agent/checkpoint.py:76` `create_checkpoint()` | `agent/checkpoint.py:18`, `agent/tools.py:226` |
+| Git checkpoints | Project `.git` — har `write_file/edit_file` se pehle & after auto-commit `agent/checkpoint.py:76` `create_checkpoint()` (legacy `workspace/.git` shadow) | `agent/checkpoint.py:18`, `agent/tools.py:226` |
 | Eval history | `eval_history.json` (append-only) | `agent/eval_history.py`, `agent/eval.py:183` `record_evaluation()` |
 | Costs | In-memory `SessionUsage` + `/stats` table | `agent/cost.py`, `agent/core.py:142` `_record_usage()` |
 
@@ -142,7 +142,7 @@ Or one-shot:
 
 ```bash
 pip install -e .
-agentic init      # workspace + sessions + .env + gitignore scaffold
+agentic init      # sessions + .env scaffold (workspace legacy)
 agentic setup     # provider + API key wizard
 ```
 
@@ -151,23 +151,23 @@ agentic setup     # provider + API key wizard
 ## Usage
 
 ```bash
-# 1. Index workspace for semantic search (first time / after big changes)
+# 1. Index project for semantic search (first time / after big changes)
 python cli.py index
 # or
 agentic index
 
-# 2. Interactive chat
+# 2. Interactive chat (read-only by default — project root explore)
 python cli.py chat
 python cli.py chat --session my-feature
 python cli.py chat --continue
 
 # 3. Single task
-python cli.py run "Fix the divide-by-zero bug in sample.py"
+python cli.py run "Explain how agent loop works in agent/core.py"
 
 # 4. Helpers
 python cli.py sessions   # list saved sessions
 python cli.py undo       # undo last change
-python cli.py diff       # show workspace git diff
+python cli.py diff       # show git diff
 ```
 
 ### Slash Commands (inside `chat`)
