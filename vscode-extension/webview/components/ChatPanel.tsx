@@ -90,35 +90,40 @@ export const ChatPanel: React.FC<Props> = ({ backendUrl, token }) => {
         break;
 
       case "done":
-        // Mark streaming complete
-        if (currentAgentMsgRef.current) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === currentAgentMsgRef.current
-                ? { ...m, isStreaming: false }
-                : m
-            )
-          );
-          currentAgentMsgRef.current = null;
-        }
+        // Robustly clear streaming on any agent bubble (even if ref lost)
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.isStreaming ? { ...m, isStreaming: false } : m
+          )
+        );
+        currentAgentMsgRef.current = null;
+        pendingToolCalls.current = [];
         setIsThinking(false);
-        // Auto-refresh session list so Sessions (N) stays live without manual Save
-        // No auto-save — user controls Save, but count updates
         break;
 
-      case "error":
+      case "error": {
+        const errText = `\n\n**Error:** ${msg.data}`;
         if (currentAgentMsgRef.current) {
           setMessages((prev) =>
             prev.map((m) =>
               m.id === currentAgentMsgRef.current
-                ? { ...m, content: m.content + `\n\n**Error:** ${msg.data}`, isStreaming: false }
+                ? { ...m, content: m.content + errText, isStreaming: false }
                 : m
             )
           );
-          currentAgentMsgRef.current = null;
+        } else {
+          // No active bubble (e.g. quota hit before streaming) -> create one so error is visible and no spinner hangs
+          const errId = nextId();
+          setMessages((prev) => [
+            ...prev,
+            { id: errId, role: "agent", content: errText.trimStart(), timestamp: Date.now(), isStreaming: false },
+          ]);
         }
+        currentAgentMsgRef.current = null;
+        pendingToolCalls.current = [];
         setIsThinking(false);
         break;
+      }
     }
   }, []);
 

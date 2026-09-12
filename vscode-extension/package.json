@@ -21,7 +21,7 @@
       "activitybar": [
         {
           "id": "agentic-panel",
-          "title": "Agentic IDE",
+          "title": "Helix",
           "icon": "media/icon.svg"
         }
       ]
@@ -38,19 +38,19 @@
     "commands": [
       {
         "command": "agentic.openChat",
-        "title": "Agentic: Open Chat Panel"
+        "title": "Helix: Open Chat Panel"
       },
       {
         "command": "agentic.startBackend",
-        "title": "Agentic: Start Backend Server"
+        "title": "Helix: Start Backend Server"
       },
       {
         "command": "agentic.stopBackend",
-        "title": "Agentic: Stop Backend Server"
+        "title": "Helix: Stop Backend Server"
       },
       {
         "command": "agentic.sendSelection",
-        "title": "Agentic: Send Selection to Agent"
+        "title": "Helix: Send Selection to Agent"
       }
     ],
     "menus": {
@@ -63,7 +63,7 @@
       ]
     },
     "configuration": {
-      "title": "Agentic IDE",
+      "title": "Helix",
       "properties": {
         "agentic.backendUrl": {
           "type": "string",

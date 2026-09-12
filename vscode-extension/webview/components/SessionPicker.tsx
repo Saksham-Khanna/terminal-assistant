@@ -55,14 +55,30 @@ export const SessionPicker: React.FC<Props> = ({
     setTimeout(fetchSessions, 600);
   };
 
+  // Close popups on outside click
+  useEffect(() => {
+    if (!isOpen && !showSaveInput) return;
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".session-picker")) {
+        setIsOpen(false);
+        setShowSaveInput(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [isOpen, showSaveInput]);
+
   return (
     <div className="session-picker">
       <div className="session-bar">
         <button
           className="toolbar-btn session-toggle-btn"
           onClick={() => {
-            setIsOpen(!isOpen);
-            if (!isOpen) fetchSessions();
+            const next = !isOpen;
+            setIsOpen(next);
+            if (next) setShowSaveInput(false);
+            if (next) fetchSessions();
           }}
           title="Manage sessions"
         >
@@ -77,7 +93,11 @@ export const SessionPicker: React.FC<Props> = ({
         </button>
         <button
           className="toolbar-btn"
-          onClick={() => setShowSaveInput(!showSaveInput)}
+          onClick={() => {
+            const next = !showSaveInput;
+            setShowSaveInput(next);
+            if (next) setIsOpen(false);
+          }}
           title="Save conversation checkpoint"
         >
           💾 Save
@@ -91,6 +111,7 @@ export const SessionPicker: React.FC<Props> = ({
             className="session-save-input"
             placeholder="Session name (optional)..."
             value={saveName}
+            autoFocus
             onChange={(e) => setSaveName(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") handleSave();
@@ -110,7 +131,7 @@ export const SessionPicker: React.FC<Props> = ({
       )}
 
       {isOpen && (
-        <div className="session-dropdown">
+        <div className={`session-dropdown ${showSaveInput ? "with-save-row" : ""}`}>
           <div className="session-dropdown-header">
             <span>Saved Sessions</span>
             <button
