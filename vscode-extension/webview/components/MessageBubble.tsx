@@ -2,7 +2,6 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ChatMessage } from "../types";
-import { ToolCallCard } from "./ToolCallCard";
 
 interface Props {
   message: ChatMessage;
@@ -10,9 +9,10 @@ interface Props {
 
 export const MessageBubble: React.FC<Props> = ({ message }) => {
   const isUser = message.role === "user";
+  const isError = !isUser && (message.content.includes("**Error:**") || message.content.includes("Rate limit") || message.content.includes("Groq API error"));
 
   return (
-    <div className={`message-bubble ${isUser ? "message-user" : "message-agent"}`}>
+    <div className={`message-bubble ${isUser ? "message-user" : "message-agent"} ${isError ? "message-error" : ""}`}>
       <div className="message-role">
         {isUser ? "You" : "Agent"}
       </div>
@@ -38,20 +38,19 @@ export const MessageBubble: React.FC<Props> = ({ message }) => {
             table({ children, ...props }) {
               return <table className="markdown-table" {...props}>{children}</table>;
             },
+            a({ children, href, ...props }) {
+              return <a href={href} target="_blank" rel="noopener noreferrer" {...(props as any)}>{children}</a>;
+            },
           }}
         >
           {message.content}
         </ReactMarkdown>
       </div>
-      {message.toolCalls && message.toolCalls.length > 0 && (
-        <div className="message-tool-calls">
-          {message.toolCalls.map((tc, i) => (
-            <ToolCallCard key={i} toolCall={tc} />
-          ))}
-        </div>
+      {message.isStreaming && !message.content && (
+        <span className="streaming-cursor">● thinking…</span>
       )}
-      {message.isStreaming && (
-        <span className="streaming-cursor">▊</span>
+      {message.isStreaming && message.content && (
+        <span className="streaming-cursor streaming-cursor-inline">▊</span>
       )}
     </div>
   );

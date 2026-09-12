@@ -210,78 +210,6 @@
 
 ---
 
-## Continuation — 11 Sept Late Night / 12 Sept 2026
-
-**User Q23:** last session.md read karle or bta aage ka kya krna chaiye, agent ka reply to bdhia lga
-**Ans:** `tell me about this project` ab sahi de raha kyunki `AGENT_WORKSPACE=.` fix kaam kiya. Suggest kiya: resume ke liye bada feature nahi, 30 min polish - README sync + re-index + GIF + key rotate. User bola karde.
-
-**Action (Done 11 Sept Late Night):**
-- `README.md:17-58` fix: `workspace/ sandboxed jail` -> `project-root guard (AGENT_WORKSPACE + AGENT_READ_ONLY)`, `workspace ko Tree-sitter` -> `project root ko`, `79 tests` -> `58 tests`, `Fix divide-by-zero in workspace/sample.py` -> `sample.py`, `checkpoint workspace/.git` -> `project .git`. Diff 30 lines `git diff README.md`.
-- `python cli.py index` -> `✓ Indexed 265 chunks` (pehle 2-3), `rag/search.py:10` `search('agent loop')` hits 4 verify, `58 passed`.
-- Commit pending tha par `dc2021c docs: update README` me already pushed tha.
-
-**User Q24:** karde bhai or fir mai extension test karke dekhuga, in-line wala to sahi kaam kar rha hai, or kisi user ko apne project me kaise use karna hai bta
-**Ans:** CLI `python cli.py chat` read-only explore OK, extension `vscode-extension/src/BackendManager.ts:60` `python -m cli web --port 8000` fail karega kyunki `webapp/` deleted `9b9fa79` - expected. Dusre user ke liye `git clone -> pip install -r requirements.txt -> cp .env.example .env -> GEMINI/GROQ key -> python cli.py index -> python cli.py chat` steps diye.
-
-**User Q25:** readme commit karde, vs code extension test kaise karu
-**Check:** `git status` clean, `git log --oneline -3` -> `dc2021c` already committed. Bata diya commit ho gaya.
-**Extension test ans:** Antigravity/VS Code `F5 Extension Host` vs `vsix` dono diye.
-
-**User Q26:** Antigravity me hu us hisab se bta
-**Ans:** Antigravity = VS Code fork, `F5` nahi `vsix` se install hota. `npm run build` + `npx @vscode/vsce package` -> `Extensions: Install from VSIX`.
-
-**User Q27:** `cd vscode-extension; npm install; npm run build; npx @vscode/vsce package` log diya
-**Log:** `added 457 packages`, `vite v6.4.3 building 1355 modules`, `../dist/webview/assets/index.js 3677 kB`, `esbuild 12.7kb`, `vsce` prompt `repository/License not found` -> `y` twice needed. Advise `npx @vscode/vsce package --allow-missing-repository`.
-
-**User Q28:** han bhai ban gya select krlia hai
-**Ans:** `helix-?` verify steps: `Developer: Reload Window`, Activity Bar `Helix` icon `package.json:22`, `Output -> Helix Backend` health check, `Send Selection to Agent` `extension.ts:48` test, real test `python cli.py chat`.
-
-**User Q29:** [Image] UI aa rha hai, issue bhi - Output `BackendManager Starting backend: python -m cli web --port 8000`, `[Error] No such command 'web'`, `Process exited with code 1`, `.env:5-6` me `GROQ_API_KEY` leak
-**Diagnosis:** UI `vscode-extension/src/AgenticProvider.ts:144` sahi, webview 1355 modules ok. Error expected `cli.py:428` web command deleted `9b9fa79` but `BackendManager.ts:60` still tries. `.env` screenshot me key exposed `gsk_3Gz...` -> immediate rotate needed `https://console.groq.com/keys`.
-**Fix options:** A) `agentic.autoStartBackend: false` settings JSON -> error silence, CLI-only. B) web stub restore -> panel live chat. User bola `dono sahi karde` + name change `agentic ai accha nahi lgra`.
-
-**User Q30:** dono sahi karde, name kuch aur karenge, suggest krio
-**Q:** `Forge / Prism / Helix / Crux / Svara` diye. User chose `Helix`.
-
-**Action (Done 12 Sept 00:30 - rename to Helix + restore web):**
-- `pyproject.toml:6` `name agentic-ide -> helix`, `description Helix — ...`, `keywords +helix`, `dependencies +fastapi>=0.110.0 +uvicorn>=0.30.0`, `scripts helix` added, `include webapp*`, `Repository helix`
-- `README.md:1` `# Helix — Terminal Coding Agent`, `README.md:216` resume bullet `Helix`
-- `requirements.txt:15` `+fastapi +uvicorn`
-- `vscode-extension/package.json:3` `name helix, displayName Helix, description Helix — ...`
-- `webapp/__init__.py` (empty) + `webapp/server.py` restored from `6eea4eb:webapp/server.py` (9325 bytes, `git show 6eea4eb:webapp/server.py > webapp/server.py` via `write_bytes` to avoid UTF-16 null bytes `SyntaxError` seen earlier), `webapp/static/index.html` placeholder
-- `cli.py:444` re-added `web` command `python -m cli web --port 8000 --host 127.0.0.1` -> `webapp.server:run_server`
-- `pip install fastapi uvicorn` + test `python -m cli web --help` + `python -m pytest tests -q` 58 passed + thread test `uvicorn.run webapp.server:app 127.0.0.1:8766 -> /api/health {"status":"ok","provider":"gemini","workspace":"D:\\work\\agentic-ide","model":"gemini-3.5-flash"}`
-- Rebuild `vscode-extension`: `npm run build` + `npx @vscode/vsce package --allow-missing-repository` -> `helix-0.1.0.vsix 11.17 MB 192 files` (old `agentic-ide-0.1.0.vsix` 11.7 MB)
-- `git add` 8 files + `git commit 574f57a feat: rename to Helix + restore web backend for Antigravity extension`
-- Extension reinstall: `Extensions: Uninstall agentic-ide` -> `Install from VSIX helix-0.1.0.vsix` -> `Reload Window` -> `Helix` icon, `Output -> Helix Backend` no error, `python -m cli web` works.
-
-**Pending now (12 Sept):**
-- `helix-0.1.0.vsix` Antigravity me verify (user reported `ban gya select krlia` for old, new ab install karna hai)
-- Rotate `GROQ_API_KEY` `gsk_3Gz...` exposed in screenshot -> `https://console.groq.com/keys` delete + new `GROQ_API_KEY` in `.env:6`, also `GEMINI_API_KEY` `AQ.Ab8R...` still on disk
-- `assets/demo.gif` 20sec bug-fix demo still pending `README.md:16`
-- Optional: update `README.md:60` Repository URL + badges if rename repo on GitHub
-
-## Files Changed This Session (12 Sept)
-
-- `pyproject.toml` — name helix, fastapi/uvicorn, helix script, webapp include
-- `requirements.txt` — +fastapi/uvicorn
-- `README.md` — title Helix, safety/project-root guard, architecture/tests 58, resume bullet
-- `cli.py` — re-added `web` command
-- `vscode-extension/package.json` — name/displayName helix
-- `webapp/server.py` — restored (6eea4eb, auth-less, 9325 bytes)
-- `webapp/__init__.py` + `webapp/static/index.html` — scaffold
-- `vscode-extension/helix-0.1.0.vsix` — rebuilt (not committed, .vsix gitignored)
-- `rag_db/` — re-indexed 265 chunks (project root)
-
-## Current State (12 Sept Night)
-
-- Project renamed **Helix**, web backend restored — `python -m cli web` + `python cli.py chat` both work, `58 passed`, `265 chunks` indexed
-- Antigravity extension builds as `helix@0.1.0`, health `{"status":"ok"}` verified on 8766, needs reinstall in Antigravity
-- Read-only guard still `AGENT_WORKSPACE=. AGENT_READ_ONLY=true` (safe explore), write needs `AGENT_READ_ONLY=false`
-- Next: install `helix-0.1.0.vsix` in Antigravity + test `Ask the agent...` streaming, rotate leaked `GROQ_API_KEY`, make `assets/demo.gif`
-
----
-
 ## Continuation — 11 Sept Late Night (Helix Rename & Web Backend Restore)
 
 **User Q23:** Helix rename + Web backend restore + Antigravity extension fix
@@ -320,4 +248,93 @@
 - Extension install ke baad check karo ki Helix panel me health `ok` dikha kya?
 - Re-index RAG: `python cli.py index` (project root indexing).
 - Demo GIF banana (`assets/demo.gif`).
+
+---
+
+## Continuation — 12 Sept 2026 (RAG Re-index, Quota Fix, Web UI Polish & Model Options)
+
+**User Q24:** extension test karna hai, pending pura karne se dikkat hai kya
+**Ans:** Nahi, `python cli.py index` se RAG better hoga, key rotate/GIF se break nahi. Offer `index` chalane ka.
+
+**Action (12 Sept):**
+- `python cli.py index` -> `277 chunks` indexed `D:\work\agentic-ide` (`rag/indexer.py:20` SKIP_DIRS), warning `HF Hub unauthenticated` but OK.
+- `.env` verify: `GEMINI_API_KEY=AQ.Ab8R...` + `GROQ_API_KEY=gsk_3Gzk...` both present (`gitignore:1` safe).
+
+**User Q25:** groq test karde
+**Repro/Test:**
+- `MODEL_PROVIDER=groq` `a.run('say hi')` -> `('Hello, how are you doing?', None)` OK
+- `a.run_stream('say hi')` -> `1 chunk` OK (`agent/core.py:257` Groq fallback)
+- `MODEL_PROVIDER=gemini` same -> `('Hi there, how are you?', None)` OK - both providers healthy.
+
+**User Q26:** [Image] extension slow + jawab ajeeb + incomplete (blue block + `LIST_DIR`/`READ_FILE` chips + `I'll start by listing...`)
+**Diagnosis:**
+- Slow: `agent/config.py:56` `rpm=5 min_interval=2.0` via `agent/ratelimit.py:44` `wait_for_rate_limit()` -> 2 tools = 4-6s + LLM 1-2s = 6-8s normal for free tier.
+- Extra slow: `webapp/server.py:199` `Agent(enable_evaluation=True)` hard-coded, `.env:9` `ENABLE_EVALUATION=false` ignore -> extra eval call.
+- Incomplete feel: `ChatPanel.tsx:30` `status=thinking` -> `isStreaming=true`, `MessageBubble.tsx:53` `▊` blinking `streaming-cursor`, `MessageBubble.tsx:46` tool chips shown inline, `SYSTEM_PROMPT` `agent/core.py:43` verbose prefix `I'll start by listing...` merges with final answer.
+**Fix (Done 12 Sept):**
+- `webapp/server.py:199` `Agent(enable_evaluation=True)` -> `Agent(enable_evaluation=None)` (env respect, saves 1 call).
+- Verify `Agent(enable_evaluation=None)` -> `evaluator None`.
+- `netstat :8000` -> `PID 20240` python still old code (`BackendManager.ts:47` healthCheck true -> reuse external), `taskkill /PID 20240 /F` killed, port 8000 free (TIME_WAIT only).
+
+**User Q27:** vaisa hi lag raha answer nahi aa raha [Image 2]
+**Check:**
+- `vscode-extension/src/BackendManager.ts:40` `getConfig()` + `start()` reuses external backend if `healthCheck()` OK -> reload window alone not enough after `server.py` fix.
+- `webview/hooks/useWebSocket.ts:35` + `ChatPanel.tsx:28` `handleWsMessage` `status/thinking` vs `done` flow - `usage` arrives before `done`, cursor `isStreaming` true until `done`.
+- `webview/types.ts:14` `ChatMessage` + `MessageBubble.tsx` rendering.
+**Action:** Killed old backend, instructed `Ctrl+Shift+P -> Agentic: Start Backend` / `Reload Window`.
+
+**User Q28:** groq kar bhai
+**Action:**
+- `.env:4` `MODEL_PROVIDER=gemini` -> `groq`, `.env:10` `LLM_RATE_RPM=5->30` `LLM_MIN_INTERVAL=2->0.5` (`agent/ratelimit.py:33`)
+- Test groq CLI `a.run('tell me about this project in 3 lines')` -> `2.55s` Helix 3-line correct (vs Gemini 6-8s). Prompt ~7.6k tokens, still under 8k when history small.
+
+**User Q29:** output thik hai par niche blue blinking button + `LIST_DIR`/`READ_FILE_RANGE` faltu, better karo [Image 3]
+**Fix (Done):**
+- `MessageBubble.tsx:46` tool list -> `details.collapsed` `Used 2 tools • show` (`ToolCallCard.tsx:33`)
+- `styles/index.css:362` `.streaming-cursor` `animation: blink` blue `▊` -> muted text, only when `!content`.
+- `vite build` `1355 modules` + `esbuild` `12.7kb`, `vsce package` -> `helix-0.1.0.vsix` 11.17 MB, `pytest 58 passed`.
+- Then user asked aur better: fully remove tool list + style/alignment sahi.
+**Fix 2 (Done same day):**
+- `MessageBubble.tsx:1` removed `ToolCallCard` import, `MessageBubble.tsx:46` entire toolCalls block deleted (no chips at all).
+- `styles/index.css:179` `chat-messages` `max-width:760px` center `margin:0 auto` `padding 16px 14px` `gap 14px`
+- `chat-toolbar` + `chat-input-area` also centered `760px`
+- `message-bubble` `border-radius:10px` `padding 12px 14px` `max-width:88%` `box-shadow` `line-height:1.65`
+- `message-user` gradient `var(--primary-accent)` right align, `message-agent` `var(--card-bg)` left, role `letter-spacing 0.5px`
+- `chat-input` `border-radius:10px` `40px height` `box-shadow` on focus, `chat-send-btn` `40px` `border-radius:10px`
+- Rebuild `1354 modules` -> `helix-0.1.0.vsix` 11.17 MB.
+
+**User Q30:** [Image] `is tool grounding used?` -> `[Groq Error: 429 TPM Limit 8000 Used 4964 Requested 7666 ... stream fallback failed: Attempted to read or stream content, but stream has been closed.]` + HuggingFace/Ollama use kar sakte?
+**Ans:** Groq free `TPM 8000` hit because `AGENT_WORKSPACE=.` -> prompt ~7666 tokens (`SYSTEM_PROMPT` + 10 `TOOL_SCHEMAS` + `rag 277 chunks` context). Earlier `./workspace` was ~2k. Fix: switch back to `MODEL_PROVIDER=gemini` (1M ctx) for exploration. HF Inference tool-calling weak, Ollama local (`ollama run llama3.1:8b` `http://localhost:11434/api/chat`) free offline but 5-15s + weaker tools - needs `agent/llm.py` `_call_ollama()` + `agent/config.py` `ollama` section.
+
+**User Q31:** model wali cheeje `model_change.md` me dalde, tab tak UI UX ka kaam karte hai - up arrow se previous chat textbox me aaye + some more
+**Action (Done):**
+- Created `model_change.md:1` - Current setup, Why 429, 5 options (Gemini stay 0d, Groq trim 1-2h, HF half-day, Ollama half-day, OpenAI paid), files to touch, quick switch commands.
+- `ChatPanel.tsx:24` `inputHistory: string[]` `historyIndex` `draftInput` refs
+- `ChatPanel.tsx:131` `handleSend` dedup push to `inputHistory` (max 50), reset index
+- `ChatPanel.tsx:149` `handleKeyDown` `ArrowUp`/`ArrowDown` terminal-like recall (checks `el.value` newline, saves draft, cycles `inputHistory` reverse, resizes textarea), `Escape` clears input/resets history index.
+- Build `1354 modules` -> `helix-0.1.0.vsix`.
+
+**User Q32:** install kaise
+**Ans:** `Ctrl+Shift+P -> Extensions: Install from VSIX... -> D:\work\agentic-ide\vscode-extension\helix-0.1.0.vsix` + `Developer: Reload Window` or `code --install-extension ... --force`.
+
+## Files Changed 12 Sept
+
+- `webapp/server.py:199` — `enable_evaluation=True` -> `None` (env respect)
+- `.env:4,10-11` — `MODEL_PROVIDER=groq` `LLM_RATE_RPM=30` `LLM_MIN_INTERVAL=0.5` (later kept groq, gemini alt in `model_change.md`)
+- `vscode-extension/webview/components/MessageBubble.tsx:1,46` — removed ToolCall import + tool chips entirely, cursor only when `!content`
+- `vscode-extension/webview/components/ChatPanel.tsx:24,131,149` — input history Up/Down/Escape + draft handling + auto-resize
+- `vscode-extension/webview/styles/index.css:179,362` — centered 760px, bubbles 88% gradient/shadow, input 10px radius, toolbar centered, cursor muted
+- `model_change.md:1` — new doc (provider comparison, TPM 8000 diag, 5 options)
+- `vscode-extension/dist/webview/` + `vscode-extension/helix-0.1.0.vsix` — 3 rebuilds (11.17 MB each)
+- Root `277 chunks` RAG re-indexed
+
+## Current State (12 Sept Night)
+
+- `AGENT_WORKSPACE=.` `AGENT_READ_ONLY=true` project root read-only, `277 chunks` indexed
+- Groq `openai/gpt-oss-20b` 2.55s but TPM 8000 tight on large prompt -> Gemini `gemini-3.5-flash` recommended for stable (switch via `.env:4`)
+- Backend `webapp/server.py` now respects `ENABLE_EVALUATION=false` (no extra eval), needs `Stop Backend` + `Start Backend` after kill PID 20240
+- Web UI: no tool chips, no blue blinking `▊`, centered 760px, better bubble/input style, Up/Down history + Esc clear
+- `model_change.md` documents Ollama/HF path for future
+- `58 passed` tests, `helix-0.1.0.vsix` ready to install via `Install from VSIX...`
+- Next: install vsix, test Up-arrow recall, switch `MODEL_PROVIDER=gemini` if TPM 429 persists, demo GIF `assets/demo.gif`, rotate keys if not done
 

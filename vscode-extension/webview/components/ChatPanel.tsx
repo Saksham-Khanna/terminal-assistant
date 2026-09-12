@@ -24,6 +24,9 @@ export const ChatPanel: React.FC<Props> = ({ backendUrl, token }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const currentAgentMsgRef = useRef<string | null>(null);
   const pendingToolCalls = useRef<ToolCall[]>([]);
+  const inputHistory = useRef<string[]>([]);
+  const historyIndex = useRef<number>(-1);
+  const draftInput = useRef<string>("");
 
   const handleWsMessage = useCallback((msg: WsIncoming) => {
     switch (msg.type) {
@@ -99,6 +102,8 @@ export const ChatPanel: React.FC<Props> = ({ backendUrl, token }) => {
           currentAgentMsgRef.current = null;
         }
         setIsThinking(false);
+        // Auto-refresh session list so Sessions (N) stays live without manual Save
+        // No auto-save — user controls Save, but count updates
         break;
 
       case "error":
@@ -132,6 +137,14 @@ export const ChatPanel: React.FC<Props> = ({ backendUrl, token }) => {
     const text = input.trim();
     if (!text || isThinking) { return; }
 
+    // Save to history (dedup consecutive)
+    if (inputHistory.current[inputHistory.current.length - 1] !== text) {
+      inputHistory.current.push(text);
+      if (inputHistory.current.length > 50) inputHistory.current.shift();
+    }
+    historyIndex.current = -1;
+    draftInput.current = "";
+
     // Add user message
     setMessages((prev) => [
       ...prev,
@@ -146,10 +159,76 @@ export const ChatPanel: React.FC<Props> = ({ backendUrl, token }) => {
     }
   }, [input, isThinking, sendChat]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape") {
+      if (input) {
+        e.preventDefault();
+        setInput("");
+        historyIndex.current = -1;
+        draftInput.current = "";
+        if (textareaRef.current) textareaRef.current.style.height = "auto";
+      }
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+      return;
+    }
+    // History recall: Up/Down like terminal (always works for single-line, for multiline only at edges)
+    if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+      if (inputHistory.current.length === 0) return;
+      const el = e.currentTarget as HTMLTextAreaElement;
+      const hasNewline = el.value.includes("\n");
+      // Allow history when single-line, or when multiline but cursor at boundary
+      if (hasNewline) {
+        const atTop = el.selectionStart === 0;
+        const atBottom = el.selectionEnd === el.value.length;
+        if (e.key === "ArrowUp" && !atTop) return;
+        if (e.key === "ArrowDown" && !atBottom) return;
+      }
+      e.preventDefault();
+      if (historyIndex.current === -1) draftInput.current = input;
+      if (e.key === "ArrowUp") {
+        if (historyIndex.current < inputHistory.current.length - 1) {
+          historyIndex.current += 1;
+          const idx = inputHistory.current.length - 1 - historyIndex.current;
+          const next = inputHistory.current[idx];
+          setInput(next);
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.style.height = "auto";
+              textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + "px";
+              textareaRef.current.selectionStart = textareaRef.current.selectionEnd = next.length;
+            }
+          });
+        }
+      } else {
+        if (historyIndex.current > 0) {
+          historyIndex.current -= 1;
+          const idx = inputHistory.current.length - 1 - historyIndex.current;
+          const next = inputHistory.current[idx];
+          setInput(next);
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.style.height = "auto";
+              textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + "px";
+              textareaRef.current.selectionStart = textareaRef.current.selectionEnd = next.length;
+            }
+          });
+        } else if (historyIndex.current === 0) {
+          historyIndex.current = -1;
+          const next = draftInput.current;
+          setInput(next);
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.style.height = "auto";
+              textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 150) + "px";
+              textareaRef.current.selectionStart = textareaRef.current.selectionEnd = next.length;
+            }
+          });
+        }
+      }
     }
   };
 

@@ -300,7 +300,10 @@ class Agent:
                         elif not tool_calls and not accumulated_text:
                             continue
                     except Exception as e2:
-                        yield f"\n[Groq Error: {e2} (stream fallback failed: {e})]"
+                        from agent.errors import friendly_error
+                        hint = friendly_error(e2)
+                        # Show friendly hint, not raw JSON
+                        yield f"\n\n**Rate limit / API error:** {hint}\n\n_Tip: switch to `MODEL_PROVIDER=gemini` in `.env` for project exploration (1M context), Groq TPM 8000 is too small for full project prompt (~7.5k). Retry in 20-30s._"
                         return
                 else:
                     raise

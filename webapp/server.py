@@ -164,6 +164,31 @@ async def read_file(path: str):
         return JSONResponse(status_code=400, content={"error": str(e)})
 
 
+@app.post("/api/files/write")
+async def write_file(payload: dict):
+    from agent.tools import _resolve
+    from agent.config import get_config
+    path = payload.get("path", "")
+    content = payload.get("content", "")
+    try:
+        # Respect AGENT_READ_ONLY guard (same as tool guard)
+        cfg = get_config()
+        if getattr(cfg, "is_read_only", False):
+            return JSONResponse(status_code=403, content={"error": "Write blocked: AGENT_READ_ONLY=true (set to false in .env to allow edits)"})
+        full = _resolve(path)
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        with open(full, "w", encoding="utf-8") as f:
+            f.write(content)
+        try:
+            from agent.checkpoint import CheckpointManager
+            CheckpointManager().commit_if_needed(f"edit {path} via Files tab")
+        except Exception:
+            pass
+        return {"path": path, "ok": True}
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+
+
 # ---------------------------------------------------------------------------
 # WebSocket - streaming chat
 # ---------------------------------------------------------------------------
@@ -180,7 +205,11 @@ def _agent_stream(agent: Agent, message: str, queue: asyncio.Queue):
         for chunk in agent.run_stream(message):
             queue.put_nowait(("chunk", chunk))
     except Exception as e:
-        queue.put_nowait(("error", str(e)))
+        try:
+            from agent.errors import friendly_error
+            queue.put_nowait(("error", friendly_error(e)))
+        except Exception:
+            queue.put_nowait(("error", str(e)))
     finally:
         try:
             agent.tool_observers.remove(_on_tool)
@@ -196,7 +225,7 @@ def _agent_stream(agent: Agent, message: str, queue: asyncio.Queue):
 @app.websocket("/ws/chat")
 async def chat(ws: WebSocket):
     await ws.accept()
-    agent = Agent(enable_evaluation=True)
+    agent = Agent(enable_evaluation=None)
     try:
         while True:
             data = await ws.receive_json()
